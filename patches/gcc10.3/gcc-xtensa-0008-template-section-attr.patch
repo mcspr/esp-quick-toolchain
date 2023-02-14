@@ -1,0 +1,159 @@
+From 886b9eee31cfd34d8b1ecd26d0483f891f8727c4 Mon Sep 17 00:00:00 2001
+From: Maxim Prokhorov <prokhorov.max@outlook.com>
+Date: Tue, 14 Feb 2023 00:13:18 +0000
+Subject: [PATCH 1/2] Double-check 'section' attribute presence for output
+
+Workaround for
+- https://gcc.gnu.org/bugzilla/show_bug.cgi?id=70435
+- https://gcc.gnu.org/bugzilla/show_bug.cgi?id=88061
+
+Do a couple of assumptions when decl is globally accessible
+- we have comdat support for the target
+- we really-really don't want specific section for all instantiations
+- this would be applied to template automatic instances only.
+  both specializations and explicit instantiations would already have
+  section attached
+- attribute text line is a valid string for section name.
+  injecting any assembler in the line would (probably) generate
+  something awful in the output .s file
+
+When dealing with local ones, apply name as-is.
+---
+ gcc/varasm.c | 113 +++++++++++++++++++++++++++++++--------------------
+ 1 file changed, 68 insertions(+), 45 deletions(-)
+
+diff --git a/gcc/varasm.c b/gcc/varasm.c
+index 814d29a02de..ac77f3b752c 100644
+--- a/gcc/varasm.c
++++ b/gcc/varasm.c
+@@ -1205,6 +1205,14 @@ get_variable_section (tree decl, bool prefer_noswitch_p)
+       return sect;
+     }
+ 
++  tree sec_attr = lookup_attribute ("section", DECL_ATTRIBUTES (decl));
++  if (sec_attr)
++    {
++      const char *section = TREE_STRING_POINTER (TREE_VALUE (TREE_VALUE (sec_attr)));
++      set_decl_section_name (decl, section);
++      return get_named_section (decl, section, reloc);
++    }
++
+   if (ADDR_SPACE_GENERIC_P (as)
+       && !DECL_THREAD_LOCAL_P (decl)
+       && !(prefer_noswitch_p && targetm.have_switchable_bss_sections)
+@@ -6897,52 +6905,67 @@ default_unique_section (tree decl, int reloc)
+   char *string;
+   tree id;
+ 
+-  switch (categorize_decl_for_section (decl, reloc))
++  prefix = nullptr;
++
++  /* And prefix only makes sense when the is COMDAT support */
++  if (!one_only)
+     {
+-    case SECCAT_TEXT:
+-      prefix = one_only ? ".t" : ".text";
+-      break;
+-    case SECCAT_RODATA:
+-    case SECCAT_RODATA_MERGE_STR:
+-    case SECCAT_RODATA_MERGE_STR_INIT:
+-    case SECCAT_RODATA_MERGE_CONST:
+-      prefix = one_only ? ".r" : ".rodata";
+-      break;
+-    case SECCAT_SRODATA:
+-      prefix = one_only ? ".s2" : ".sdata2";
+-      break;
+-    case SECCAT_DATA:
+-      prefix = one_only ? ".d" : ".data";
+-      break;
+-    case SECCAT_DATA_REL:
+-      prefix = one_only ? ".d.rel" : ".data.rel";
+-      break;
+-    case SECCAT_DATA_REL_LOCAL:
+-      prefix = one_only ? ".d.rel.local" : ".data.rel.local";
+-      break;
+-    case SECCAT_DATA_REL_RO:
+-      prefix = one_only ? ".d.rel.ro" : ".data.rel.ro";
+-      break;
+-    case SECCAT_DATA_REL_RO_LOCAL:
+-      prefix = one_only ? ".d.rel.ro.local" : ".data.rel.ro.local";
+-      break;
+-    case SECCAT_SDATA:
+-      prefix = one_only ? ".s" : ".sdata";
+-      break;
+-    case SECCAT_BSS:
+-      prefix = one_only ? ".b" : ".bss";
+-      break;
+-    case SECCAT_SBSS:
+-      prefix = one_only ? ".sb" : ".sbss";
+-      break;
+-    case SECCAT_TDATA:
+-      prefix = one_only ? ".td" : ".tdata";
+-      break;
+-    case SECCAT_TBSS:
+-      prefix = one_only ? ".tb" : ".tbss";
+-      break;
+-    default:
+-      gcc_unreachable ();
++      tree sec_attr = lookup_attribute ("section", DECL_ATTRIBUTES (decl));
++      if (sec_attr)
++        {
++          prefix = TREE_STRING_POINTER (TREE_VALUE (TREE_VALUE (sec_attr)));
++        }
++    }
++
++  if (prefix == nullptr)
++    {
++      switch (categorize_decl_for_section (decl, reloc))
++        {
++        case SECCAT_TEXT:
++          prefix = one_only ? ".t" : ".text";
++          break;
++        case SECCAT_RODATA:
++        case SECCAT_RODATA_MERGE_STR:
++        case SECCAT_RODATA_MERGE_STR_INIT:
++        case SECCAT_RODATA_MERGE_CONST:
++          prefix = one_only ? ".r" : ".rodata";
++          break;
++        case SECCAT_SRODATA:
++          prefix = one_only ? ".s2" : ".sdata2";
++          break;
++        case SECCAT_DATA:
++          prefix = one_only ? ".d" : ".data";
++          break;
++        case SECCAT_DATA_REL:
++          prefix = one_only ? ".d.rel" : ".data.rel";
++          break;
++        case SECCAT_DATA_REL_LOCAL:
++          prefix = one_only ? ".d.rel.local" : ".data.rel.local";
++          break;
++        case SECCAT_DATA_REL_RO:
++          prefix = one_only ? ".d.rel.ro" : ".data.rel.ro";
++          break;
++        case SECCAT_DATA_REL_RO_LOCAL:
++          prefix = one_only ? ".d.rel.ro.local" : ".data.rel.ro.local";
++          break;
++        case SECCAT_SDATA:
++          prefix = one_only ? ".s" : ".sdata";
++          break;
++        case SECCAT_BSS:
++          prefix = one_only ? ".b" : ".bss";
++          break;
++        case SECCAT_SBSS:
++          prefix = one_only ? ".sb" : ".sbss";
++          break;
++        case SECCAT_TDATA:
++          prefix = one_only ? ".td" : ".tdata";
++          break;
++        case SECCAT_TBSS:
++          prefix = one_only ? ".tb" : ".tbss";
++          break;
++        default:
++          gcc_unreachable ();
++        }
+     }
+ 
+   id = DECL_ASSEMBLER_NAME (decl);
+-- 
+2.30.2
+

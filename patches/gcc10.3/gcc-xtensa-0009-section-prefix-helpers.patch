@@ -1,0 +1,170 @@
+From 63e5c83861aa99daad76bb52c926ca17b8ce1097 Mon Sep 17 00:00:00 2001
+From: Maxim Prokhorov <prokhorov.max@outlook.com>
+Date: Tue, 14 Feb 2023 00:21:32 +0000
+Subject: [PATCH 2/2] Section prefix helpers for read-only data and strings
+
+---
+ gcc/common/config/xtensa/xtensa-common.c | 29 +++++++++++++++++++
+ gcc/config/xtensa/elf.h                  |  2 --
+ gcc/config/xtensa/xtensa.c               | 36 +++++++++++++++++++++---
+ gcc/config/xtensa/xtensa.opt             | 14 +++++++++
+ 4 files changed, 75 insertions(+), 6 deletions(-)
+
+diff --git a/gcc/common/config/xtensa/xtensa-common.c b/gcc/common/config/xtensa/xtensa-common.c
+index dd751a14d8c..ba7008d8a34 100644
+--- a/gcc/common/config/xtensa/xtensa-common.c
++++ b/gcc/common/config/xtensa/xtensa-common.c
+@@ -23,6 +23,8 @@ along with GCC; see the file COPYING3.  If not see
+ #include "tm.h"
+ #include "common/common-target.h"
+ #include "common/common-target-def.h"
++#include "opts.h"
++#include "flags.h"
+ 
+ /* Implement TARGET_OPTION_OPTIMIZATION_TABLE.  */
+ 
+@@ -37,9 +39,36 @@ static const struct default_options xtensa_option_optimization_table[] =
+     { OPT_LEVELS_NONE, 0, NULL, 0 }
+   };
+ 
++vec<const char*> xtensa_flash_rodata_sections;
++vec<const char*> xtensa_flash_string_sections;
++
++static bool
++xtensa_handle_option (struct gcc_options *opts,
++		  struct gcc_options *opts_set ATTRIBUTE_UNUSED,
++		  const struct cl_decoded_option *decoded,
++		  location_t loc ATTRIBUTE_UNUSED)
++{
++  size_t code = decoded->opt_index;
++  const char *arg = decoded->arg;
++
++  switch (code)
++  {
++    case OPT_mflash_string_section:
++      xtensa_flash_string_sections.safe_push (arg);
++      break;
++    case OPT_mflash_rodata_section:
++      xtensa_flash_rodata_sections.safe_push (arg);
++      break;
++  }
++
++  return true;
++}
++
+ #undef TARGET_DEFAULT_TARGET_FLAGS
+ #define TARGET_DEFAULT_TARGET_FLAGS (TARGET_DEFAULT)
+ #undef TARGET_OPTION_OPTIMIZATION_TABLE
+ #define TARGET_OPTION_OPTIMIZATION_TABLE xtensa_option_optimization_table
++#undef TARGET_HANDLE_OPTION
++#define TARGET_HANDLE_OPTION xtensa_handle_option
+ 
+ struct gcc_targetm_common targetm_common = TARGETM_COMMON_INITIALIZER;
+diff --git a/gcc/config/xtensa/elf.h b/gcc/config/xtensa/elf.h
+index 6fd589fed32..b464992aae9 100644
+--- a/gcc/config/xtensa/elf.h
++++ b/gcc/config/xtensa/elf.h
+@@ -18,8 +18,6 @@ You should have received a copy of the GNU General Public License
+ along with GCC; see the file COPYING3.  If not see
+ <http://www.gnu.org/licenses/>.  */
+ 
+-#define TARGET_SECTION_TYPE_FLAGS xtensa_multibss_section_type_flags
+-
+ #undef ASM_APP_ON
+ #define ASM_APP_ON "#APP\n"
+ 
+diff --git a/gcc/config/xtensa/xtensa.c b/gcc/config/xtensa/xtensa.c
+index 5b1aa9b234d..8d23b76dc06 100644
+--- a/gcc/config/xtensa/xtensa.c
++++ b/gcc/config/xtensa/xtensa.c
+@@ -130,8 +130,8 @@ static bool xtensa_return_in_msb (const_tree);
+ static void printx (FILE *, signed int);
+ static rtx xtensa_builtin_saveregs (void);
+ static bool xtensa_legitimate_address_p (machine_mode, rtx, bool);
+-static unsigned int xtensa_multibss_section_type_flags (tree, const char *,
+-							int) ATTRIBUTE_UNUSED;
++static unsigned int xtensa_section_type_flags (tree, const char *,
++							int);
+ static section *xtensa_select_rtx_section (machine_mode, rtx,
+ 					   unsigned HOST_WIDE_INT);
+ static bool xtensa_rtx_costs (rtx, machine_mode, int, int, int *, bool);
+@@ -200,6 +200,9 @@ static bool xtensa_function_ok_for_sibcall (tree, tree);
+ #undef TARGET_ASM_SELECT_RTX_SECTION
+ #define TARGET_ASM_SELECT_RTX_SECTION  xtensa_select_rtx_section
+ 
++#undef TARGET_SECTION_TYPE_FLAGS
++#define TARGET_SECTION_TYPE_FLAGS xtensa_section_type_flags
++
+ #undef TARGET_LEGITIMIZE_ADDRESS
+ #define TARGET_LEGITIMIZE_ADDRESS xtensa_legitimize_address
+ #undef TARGET_MODE_DEPENDENT_ADDRESS_P
+@@ -4028,10 +4031,17 @@ order_regs_for_local_alloc (void)
+ 
+ 
+ /* Some Xtensa targets support multiple bss sections.  If the section
+-   name ends with ".bss", add SECTION_BSS to the flags.  */
++   name ends with ".bss", add SECTION_BSS to the flags.
++
++   Also Help out ESP8266 with so called 'flash' sections. */
++
++#define STR_PREFIX_P(STR,PREFIX) (strncmp (STR, PREFIX, strlen (PREFIX)) == 0)
++
++extern vec<const char*> xtensa_flash_string_sections;
++extern vec<const char*> xtensa_flash_rodata_sections;
+ 
+ static unsigned int
+-xtensa_multibss_section_type_flags (tree decl, const char *name, int reloc)
++xtensa_section_type_flags (tree decl, const char *name, int reloc)
+ {
+   unsigned int flags = default_section_type_flags (decl, name, reloc);
+   const char *suffix;
+@@ -4047,6 +4057,24 @@ xtensa_multibss_section_type_flags (tree decl, const char *name, int reloc)
+ 		 "%<.bss%> section");
+     }
+ 
++  const bool read_only = TREE_READONLY (decl);
++
++  // Warn when node is forced into our custom .rodata (accidentally or otherwise)
++  if ((TREE_CODE (decl) != FUNCTION_DECL) && !read_only)
++    for (const char *prefix : xtensa_flash_rodata_sections)
++      if (STR_PREFIX_P (name, prefix))
++        error ("variable %q+D with dynamic initialization put "
++               "into flash memory area", decl);
++
++  // Flash string blobs should be properly flagged
++  // (e.g. for Arduino PSTR(...), so we don't have to use LD script)
++  for (const char *prefix : xtensa_flash_string_sections)
++    if (STR_PREFIX_P (name, prefix))
++      {
++        flags &= ~(SECTION_NOTYPE);
++        flags |= SECTION_MERGE | SECTION_STRINGS | (SECTION_ENTSIZE & 1);
++      }
++
+   return flags;
+ }
+ 
+diff --git a/gcc/config/xtensa/xtensa.opt b/gcc/config/xtensa/xtensa.opt
+index 97aa44f92c6..fb07fd3715f 100644
+--- a/gcc/config/xtensa/xtensa.opt
++++ b/gcc/config/xtensa/xtensa.opt
+@@ -53,3 +53,17 @@ Target Report Mask(SERIALIZE_VOLATILE)
+ mforce-l32
+ Target Report Mask(FORCE_L32)
+ Use l32i to access 1- and 2-byte quantities in memory instead of l8ui/l16ui
++
++mflash-string-section
++Target Joined MissingArgError(section missing after %qs)
++Prefix of section(s) that would be forcibly flagged as SHF_MERGE | SHF_STRINGS
++
++mflash-string-section=
++Target Joined Alias(mflash-string-section) MissingArgError(section missing after %qs)
++
++mflash-rodata-section
++Target Joined MissingArgError(section missing after %qs)
++Prefix of section(s) that cannot contain non-const data
++
++mflash-rodata-section=
++Target Joined Alias(mflash-rodata-section) MissingArgError(section missing after %qs)
+-- 
+2.30.2
+
