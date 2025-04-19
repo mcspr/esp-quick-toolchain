@@ -1,0 +1,45 @@
+From 4bb6581aa824dea975c1c54078411c50284cc03e Mon Sep 17 00:00:00 2001
+From: Paul Zimmermann <Paul.Zimmermann@inria.fr>
+Date: Fri, 18 Dec 2020 09:52:40 +0100
+Subject: [PATCH] fixes to make compilation succeeds
+
+---
+ newlib/libm/math/w_tgamma.c  | 1 +
+ newlib/libm/math/wf_tgamma.c | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/newlib/libm/math/w_tgamma.c b/newlib/libm/math/w_tgamma.c
+index 0f90dd4c6..52d5d71d3 100644
+--- a/newlib/libm/math/w_tgamma.c
++++ b/newlib/libm/math/w_tgamma.c
+@@ -16,6 +16,7 @@
+  */
+ 
+ #include "fdlibm.h"
++#include <errno.h>
+ 
+ #ifndef _DOUBLE_IS_32BITS
+ 
+diff --git a/newlib/libm/math/wf_tgamma.c b/newlib/libm/math/wf_tgamma.c
+index 80aacf757..504cb4c29 100644
+--- a/newlib/libm/math/wf_tgamma.c
++++ b/newlib/libm/math/wf_tgamma.c
+@@ -15,6 +15,7 @@
+ 
+ #include "math.h"
+ #include "fdlibm.h"
++#include <errno.h>
+ 
+ #ifdef __STDC__
+ 	float tgammaf(float x)
+@@ -34,7 +35,6 @@
+ 	    errno = EDOM;
+ 	  else if (finite(x))
+ 	    errno = ERANGE;
+-	}
+ 	return y;
+ #endif
+ }
+-- 
+2.49.0
+

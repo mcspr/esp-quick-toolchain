@@ -1,0 +1,13 @@
+diff --git a/newlib/configure.host b/newlib/configure.host
+index 2faa027e1..8d402c632 100644
+--- a/newlib/configure.host
++++ b/newlib/configure.host
+@@ -639,7 +639,7 @@ case "${host}" in
+   xtensa*-*-* | xtensa*-*)
+ 	posix_dir=posix
+ 	sys_dir=xtensa
+-	newlib_cflags="${newlib_cflags} -D_NO_EXECVE -D_NO_GLOB -D_NO_WORDEXP -DHAVE_OPENDIR -DSIGNAL_PROVIDED -DABORT_PROVIDED -DMALLOC_PROVIDED -DATEXIT_PROVIDED"
++	newlib_cflags="${newlib_cflags} -D_NO_EXECVE -D_NO_GLOB -D_NO_WORDEXP -D_NO_POSIX_SPAWN -DHAVE_OPENDIR -DSIGNAL_PROVIDED -DABORT_PROVIDED -DMALLOC_PROVIDED -DATEXIT_PROVIDED"
+ 	;;
+   z8k-*-coff)
+ 	sys_dir=z8ksim

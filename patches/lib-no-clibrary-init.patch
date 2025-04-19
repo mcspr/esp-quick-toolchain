@@ -1,0 +1,17 @@
+diff --git a/newlib/libc/sys/xtensa/clibrary_init.c b/newlib/libc/sys/xtensa/clibrary_init.c
+index e71722a82..6ad957d73 100644
+--- a/newlib/libc/sys/xtensa/clibrary_init.c
++++ b/newlib/libc/sys/xtensa/clibrary_init.c
+@@ -25,6 +25,7 @@
+ #include <stdlib.h>
+ #include <unistd.h>
+ 
++#if 0
+ const char * __progname = 0;
+ 
+ void
+@@ -40,3 +41,4 @@ __clibrary_init (int argc, char **argv, char **envp,
+   if (fini)
+     _atexit (fini);
+ }
++#endif
