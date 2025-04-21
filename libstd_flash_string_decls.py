@@ -4,9 +4,12 @@
 #   "PyYAML==6.*",
 #   "ast-grep-py",
 # ]
-# requires-python = ">=3.10"
+# requires-python = ">=3.8"
 # ///
 
+from typing import Tuple, List, Dict, Optional
+
+import os
 import argparse
 import concurrent.futures
 import sys
@@ -186,11 +189,10 @@ def make_throwing_rule(name):
 
 
 def is_ignored(p: pathlib.Path) -> bool:
-    match p.suffix:
-        case ".h" | ".hpp" | ".tpp":
-            return False
-        case "":
-            return False
+    if p.suffix in [".h", ".hpp", ".tpp"]:
+        return False
+    elif p.suffix == "":
+        return False
 
     return True
 
@@ -202,7 +204,7 @@ def format_decl(name: str, text: str) -> str:
 # for the sake of coherency, preserve __N(...) msgids
 def maybe_swap_localizable_node(
     node: ast_grep_py.SgNode, text: str
-) -> tuple[ast_grep_py.SgNode, str]:
+) -> Tuple[ast_grep_py.SgNode, str]:
     parent = node.parent()
     if not parent:
         raise ValueError()
@@ -224,10 +226,10 @@ def maybe_swap_localizable_node(
 
 # processes given string literal / concatenated string node and prepares the required file edits
 class Worker:
-    decls: list[str]
-    edits: list[ast_grep_py.Edit]
+    decls: List[str]
+    edits: List[ast_grep_py.Edit]
 
-    _known: dict[str, dict[str, str]]
+    _known: Dict[str, Dict[str, str]]
 
     def __init__(self, tag: str):
         self.decls = []
@@ -240,17 +242,18 @@ class Worker:
         return (len(self.edits) > 0) and (len(self.decls) > 0)
 
     def process(self, tag: str, node: ast_grep_py.SgNode):
-        match node.kind():
-            # result.text() includes \n and spacing
-            case "concatenated_string":
-                text = ""
-                for child in node.children():
-                    text += child.text().replace('"', "")
-                text = f'"{text}"'
+        kind = node.kind()
 
-            # literal usable as-is
-            case "string_literal":
-                text = node.text()
+        # result.text() includes \n and spacing
+        if kind == "concatenated_string":
+            text = ""
+            for child in node.children():
+                text += child.text().replace('"', "")
+            text = f'"{text}"'
+
+        # literal usable as-is
+        elif kind == "string_literal":
+            text = node.text()
 
         # do not duplicate var->text declarations
         if not tag in self._known:
@@ -291,7 +294,7 @@ def worker(root: pathlib.Path, p: pathlib.Path, tagged_rules):
             for result in node.find_all(rule):
                 inst.process(tag, result)
 
-    def find_insert_anchor(data) -> tuple[str | None, int]:
+    def find_insert_anchor(data) -> Tuple[Optional[str], int]:
         for m in NS_INSERT_ANCHORS:
             count = data.count(m)
             if count:
@@ -299,7 +302,7 @@ def worker(root: pathlib.Path, p: pathlib.Path, tagged_rules):
 
         return (None, 0)
 
-    def prepare_decls(decls: list[str], anchor: str) -> str:
+    def prepare_decls(decls: List[str], anchor: str) -> str:
         return "\n".join(
             [
                 f"#include <{HELPER_HEADER}>",
@@ -322,7 +325,7 @@ def worker(root: pathlib.Path, p: pathlib.Path, tagged_rules):
             raise ValueError(f"{p} has no suitable anchor")
 
         if count > 2:
-            raise ValueError(f'{p} has no more than one anchor "{anchor}"')
+            raise ValueError(f'{p} has more than one anchor "{anchor}"')
 
         sub = prepare_decls(inst.decls, anchor)
         return (p, out.replace(anchor, sub))
@@ -334,10 +337,28 @@ RULES = {
 }
 
 
+def os_walk(path_root: pathlib.Path):
+    for path_str, dirnames, filenames in os.walk(path_root.as_posix()):
+        if path_root == ".":
+            path_str = path_str[2:]
+        yield pathlib.Path(path_str), dirnames, filenames
+
+
+def pathlib_walk(path_root: pathlib.Path):
+    return path_root.walk()
+
+
+def walk(path_root: pathlib.Path):
+    if sys.version_info >= (3, 12):
+        return pathlib_walk(path_root)
+
+    return os_walk(path_root)
+
+
 # usually we want everything in the directoy
 # note that the path root is later used for name generation based on relative path
 def find_files(path_root):
-    for root, dir, files in path_root.walk():
+    for root, dir, files in walk(path_root):
         for file in files:
             p = root / file
             if is_ignored(p):
@@ -357,19 +378,20 @@ def write_or_replace_helper_header(p: pathlib.Path):
     except:
         pass
 
-    with p.open("w") as f:
-        f.write(HELPER_HEADER_SRC)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(HELPER_HEADER_SRC)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument("--root", type=pathlib.Path, default=DEFAULT_ROOT)
     parser.add_argument(
-        "--root", type=pathlib.Path, default=DEFAULT_ROOT
-    )
-    parser.add_argument(
-        "--output", type=argparse.FileType('w'), default=sys.stdout, help="logging output"
+        "--output",
+        type=argparse.FileType("w"),
+        default=sys.stdout,
+        help="logging output",
     )
     args = parser.parse_args()
 
@@ -377,9 +399,7 @@ if __name__ == "__main__":
 
     executor = concurrent.futures.ProcessPoolExecutor()
     with executor as e:
-        futures: list[concurrent.futures.Future] = []
-        for p in find_files(args.root):
-            futures.append(e.submit(worker, args.root, p, RULES))
+        futures = [e.submit(worker, args.root, p, RULES) for p in find_files(args.root)]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
             if not result:
@@ -387,7 +407,7 @@ if __name__ == "__main__":
 
             p, data = result
             if not data:
-                print(f'{p} already modified', file=args.output)
+                print(f"{p} already modified", file=args.output)
                 continue
 
             print(p, file=args.output)
