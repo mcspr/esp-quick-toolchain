@@ -26,7 +26,6 @@ else ifeq ($(GHTOKEN),)
 endif
 
 # Depending on the GCC version get proper branch and support libs
-GNUHTTP := https://gcc.gnu.org/pub/gcc/infrastructure
 ifeq ($(GCC),4.8)
     ISL           := 0.12.2
     GCC_BRANCH    := call0-4.8.2
@@ -132,7 +131,7 @@ else ifeq ($(GCC), 14.2)
     GCC_PKGREL    := 140200
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_38
+    BINUTILS_BRANCH := binutils-2_44
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else
@@ -142,10 +141,39 @@ endif
 # MKSPIFFS must stay at 0.2.0 until Arduino boards.txt.py fixes non-page-aligned sizes
 MKSPIFFS_BRANCH := 0.2.0
 
+# GNU tools downloads usually live here
+GNU_HTTP := https://gcc.gnu.org/pub/gcc/infrastructure
+
+# GNU GDB & the rest of external dependencies
+ISL_URL := $(GNU_HTTP)/isl-$(ISL).tar.bz2
+
+GMP_VER := 6.3.0
+GMP_URL := $(GNU_HTTP)/gmp-$(GMP_VER).tar.bz2
+
+MPFR_VER := 4.2.2
+MPFR_URL := $(GNU_HTTP)/mpfr-$(GMP_VER).tar.bz2
+
+MPC_VER := 1.3.1
+MPC_URL := $(GNU_HTTP)/mpc-$(MPC_VER).tar.gz
+
+CLOOG_VER := 0.18.1
+CLOOG_URL := $(GNU_HTTP)/cloog-$(CLOOG_VER).tar.gz
+
+LIBELF_URL := https://github.com/earlephilhower/esp-quick-toolchain/raw/master/blobs/libelf-0.8.13.tar.gz
+
+URLS := \
+	$(ISL_URL) \
+	$(GMP_URL) \
+	$(MPFR_URL) \
+	$(CLOOG_URL) \
+	$(MPC_URL) \
+	$(LIBELF_URL)
+
 # LTO doesn't work on 4.8, may not be useful later
 LTO := $(if $(lto),$(lto),false)
 
 # Define the build and output naming, don't use directly (see below)
+# currently not using ..._STATIC, but it would be called for tools builds
 LINUX_HOST   := x86_64-linux-gnu
 LINUX_AHOST  := x86_64-pc-linux-gnu
 LINUX_EXT    := .x86_64
@@ -156,6 +184,7 @@ LINUX_TARCMD := tar
 LINUX_TAROPT := zcf
 LINUX_TAREXT := tar.gz
 LINUX_ASYS   := linux_x86_64
+LINUX_STATIC := -static-libgcc -static-libstdc++
 
 LINUX32_HOST   := i686-linux-gnu
 LINUX32_AHOST  := i686-pc-linux-gnu
@@ -167,6 +196,7 @@ LINUX32_TARCMD := tar
 LINUX32_TAROPT := zcf
 LINUX32_TAREXT := tar.gz
 LINUX32_ASYS   := linux_i686
+LINUX32_STATIC := -static-libgcc -static-libstdc++
 
 WIN32_HOST   := i686-w64-mingw32
 WIN32_AHOST  := i686-mingw32
@@ -178,6 +208,7 @@ WIN32_TARCMD := zip
 WIN32_TAROPT := -rq
 WIN32_TAREXT := zip
 WIN32_ASYS   := windows_x86
+WIN32_STATIC := -static-libgcc -static-libstdc++
 
 WIN64_HOST   := x86_64-w64-mingw32
 WIN64_AHOST  := x86_64-mingw32
@@ -189,17 +220,32 @@ WIN64_TARCMD := zip
 WIN64_TAROPT := -rq
 WIN64_TAREXT := zip
 WIN64_ASYS   := windows_amd64
+WIN64_STATIC := -static-libgcc -static-libstdc++
 
-OSX_HOST   := x86_64-apple-darwin14
-OSX_AHOST  := x86_64-apple-darwin
-OSX_EXT    := .osx
-OSX_EXE    := 
-OSX_MKTGT  := osx
-OSX_BFLGS  :=
-OSX_TARCMD := tar
-OSX_TAROPT := zcf
-OSX_TAREXT := tar.gz
-OSX_ASYS   := darwin_x86_64\",\ \"darwin_arm64
+MACOSX86_HOST   := x86_64-apple-darwin20.4
+MACOSX86_AHOST  := x86_64-apple-darwin
+MACOSX86_EXT    := .macosx86
+MACOSX86_EXE    :=
+MACOSX86_MKTGT  := macosx86
+MACOSX86_BFLGS  :=
+MACOSX86_TARCMD := tar
+MACOSX86_TAROPT := zcf
+MACOSX86_TAREXT := tar.gz
+MACOSX86_ASYS   := darwin_x86_64
+MACOSX86_STATIC := -static-libgcc -static-libstdc++
+
+MACOSARM_HOST   := aarch64-apple-darwin20.4
+MACOSARM_AHOST  := arm64-apple-darwin
+MACOSARM_EXT    := .macosarm
+MACOSARM_EXE    :=
+MACOSARM_MKTGT  := macosarm
+MACOSARM_BFLGS  :=
+MACOSARM_TARCMD := tar
+MACOSARM_TAROPT := zcf
+MACOSARM_TAREXT := tar.gz
+MACOSARM_ASYS   := darwin_arm64
+MACOSARM_OVER   := CC=$(MACOSARM_HOST)-cc CXX=$(MACOSARM_HOST)-c++ STRIP=touch
+MACOSARM_STATIC := -lc -lc++
 
 ARM64_HOST   := aarch64-linux-gnu
 ARM64_AHOST  := aarch64-linux-gnu
@@ -211,6 +257,7 @@ ARM64_TARCMD := tar
 ARM64_TAROPT := zcf
 ARM64_TAREXT := tar.gz
 ARM64_ASYS   := linux_aarch64
+ARM64_STATIC := -static-libgcc -static-libstdc++
 
 RPI_HOST   := arm-linux-gnueabihf
 RPI_AHOST  := arm-linux-gnueabihf
@@ -221,7 +268,8 @@ RPI_BFLGS  := LDFLAGS=-static
 RPI_TARCMD := tar
 RPI_TAROPT := zcf
 RPI_TAREXT := tar.gz
-RPI_ASYS   := linux_armv6l
+RPI_ASYS   := linux_armv6l\",\ \"linux_armv7l
+RPI_STATIC := -static-libgcc -static-libstdc++
 
 # Call with $@ to get the appropriate variable for this architecture
 host   = $($(call arch,$(1))_HOST)
@@ -337,18 +385,18 @@ linux default: .stage.LINUX.done
 .PHONY: .stage.download
 
 # Build all toolchain versions
-all: .stage.LINUX.done .stage.LINUX32.done .stage.WIN32.done .stage.WIN64.done .stage.OSX.done .stage.ARM64.done .stage.RPI.done
+all: .stage.LINUX.done .stage.LINUX32.done .stage.WIN32.done .stage.WIN64.done .stage.MACOSX86.done .stage.MACOSARM.done .stage.ARM64.done .stage.RPI.done
 	echo STAGE: $@
 	echo All complete
 
 download: .stage.download
 
 # Other cross-compile cannot start until Linux is built
-.stage.LINUX32.gcc1-make .stage.WIN32.gcc1-make .stage.WIN64.gcc1-make .stage.OSX.gcc1-make .stage.ARM64.gcc1-make .stage.RPI.gcc1-make: .stage.LINUX.done
+.stage.LINUX32.gcc1-make .stage.WIN32.gcc1-make .stage.WIN64.gcc1-make .stage.MACOSX86.gcc1-make .stage.MACOSARM.gcc1-make .stage.ARM64.gcc1-make .stage.RPI.gcc1-make: .stage.LINUX.done
 
 
 # Clean all temporary outputs
-clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .cleaninst.WIN64.clean .cleaninst.OSX.clean .cleaninst.ARM64.clean .cleaninst.RPI.clean
+clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .cleaninst.WIN64.clean .cleaninst.MACOSX86.clean .cleaninst.MACOSARM.clean .cleaninst.ARM64.clean .cleaninst.RPI.clean
 	echo STAGE: $@
 	rm -rf .stage* *.json *.tar.gz *.zip venv $(ARDUINO) pkg.* log.* > /dev/null 2>&1
 
@@ -382,8 +430,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 .stage.prepgit: .stage.download .clean.gits
 	echo STAGE: $@
 	for i in binutils-gdb gcc newlib lx106-hal mkspiffs mklittlefs esptool; do cd $(REPODIR)/$$i && git reset --hard HEAD && git submodule init && git submodule update && git clean -f -d; done > $(call log,$@) 2>&1
-	for url in $(GNUHTTP)/gmp-6.1.0.tar.bz2 $(GNUHTTP)/mpfr-3.1.4.tar.bz2 $(GNUHTTP)/mpc-1.0.3.tar.gz \
-	           $(GNUHTTP)/isl-$(ISL).tar.bz2 $(GNUHTTP)/cloog-0.18.1.tar.gz https://github.com/earlephilhower/esp-quick-toolchain/raw/master/blobs/libelf-0.8.13.tar.gz ; do \
+	for url in $(URLS) ; do \
 	    archive=$${url##*/}; name=$${archive%.t*}; base=$${name%-*}; ext=$${archive##*.} ; \
 	    echo "-------- getting $${name}" ; \
 	    cd $(REPODIR) && ( test -r $${archive} || wget $${url} ) ; \
