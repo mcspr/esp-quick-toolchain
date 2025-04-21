@@ -145,19 +145,19 @@ MKSPIFFS_BRANCH := 0.2.0
 GNU_HTTP := https://gcc.gnu.org/pub/gcc/infrastructure
 
 # GNU GDB & the rest of external dependencies
-ISL_URL := $(GNU_HTTP)/isl-$(ISL).tar.bz2
+ISL_URL := https://libisl.sourceforge.io/isl-$(ISL).tar.xz
 
 GMP_VER := 6.3.0
-GMP_URL := $(GNU_HTTP)/gmp-$(GMP_VER).tar.bz2
+GMP_URL := https://gmplib.org/download/gmp/gmp-$(GMP_VER).tar.xz
 
 MPFR_VER := 4.2.2
-MPFR_URL := $(GNU_HTTP)/mpfr-$(GMP_VER).tar.bz2
+MPFR_URL := https://www.mpfr.org/mpfr-current/mpfr-$(MPFR_VER).tar.xz
 
 MPC_VER := 1.3.1
-MPC_URL := $(GNU_HTTP)/mpc-$(MPC_VER).tar.gz
+MPC_URL := https://ftp.gnu.org/gnu/mpc/mpc-$(MPC_VER).tar.gz
 
 CLOOG_VER := 0.18.1
-CLOOG_URL := $(GNU_HTTP)/cloog-$(CLOOG_VER).tar.gz
+CLOOG_URL := https://github.com/periscop/cloog/releases/download/cloog-$(CLOOG_VER)/cloog-$(CLOOG_VER).tar.gz
 
 LIBELF_URL := https://github.com/earlephilhower/esp-quick-toolchain/raw/master/blobs/libelf-0.8.13.tar.gz
 
@@ -435,8 +435,9 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	    echo "-------- getting $${name}" ; \
 	    cd $(REPODIR) && ( test -r $${archive} || wget $${url} ) ; \
 	    case "$${ext}" in \
-	        gz)  (cd $(REPODIR)/$(GCC_DIR); tar xfz ../$${archive});; \
 	        bz2) (cd $(REPODIR)/$(GCC_DIR); tar xfj ../$${archive});; \
+	        gz)  (cd $(REPODIR)/$(GCC_DIR); tar xfz ../$${archive});; \
+	        xz)  (cd $(REPODIR)/$(GCC_DIR); tar xfJ ../$${archive});; \
 	    esac ; \
 	    (cd $(REPODIR)/$(GCC_DIR); rm -rf $${base}; ln -s $${name} $${base}) \
 	done >> $(call log,$@) 2>&1
