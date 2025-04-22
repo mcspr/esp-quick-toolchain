@@ -514,11 +514,13 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(GCC_DIR) > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/$(GCC_DIR) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(REPODIR)/$(GCC_DIR)/gmp/configure) > $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(REPODIR)/$(GCC_DIR)/configure $(call configure,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.gcc1-make: .stage.%.gcc1-config
 	echo STAGE: $@
+	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); cd gmp; $(MAKE)) > $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(MAKE) all-gcc; $(MAKE) install-gcc) > $(call log,$@) 2>&1
 	touch $@
 
