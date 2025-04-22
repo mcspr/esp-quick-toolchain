@@ -503,7 +503,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	mkdir -p $(call arena,$@) > $(call log,$@) 2>&1
 
-# Shared dependencies
+# Shared dependency for binutils and gcc
 .stage.%.gmp: .stage.%.start
 	echo STAGE: $@
 	(cd $(call arena,$@); \
@@ -511,15 +511,19 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(cd $(call arena,$@); \
 		mkdir gmp gmp-$(GMP_VER); \
 		mkdir mpfr mpfr-$(MPFR_VER)) >> $(call log,$@) 2>&1
+	echo CALLED: $(CONFIGURE_GMP_$(@))
 	(cd $(call arena,$@)/gmp-$(GMP_VER); $(call setenv,$@); \
-		$(REPODIR)/gmp-$(GMP_VER)/configure $(filter-out --target=$(TARGET_ARCH), $(call configure,$@)) --prefix=$(call arena,$@)/gmp \
+		$(REPODIR)/gmp-$(GMP_VER)/configure $(CONFIGURE_GMP) $(call configure,$@) --target=$(call host,$@) --prefix=$(call arena,$@)/gmp \
 			&& $(MAKE) \
 			&& $(MAKE) install) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/mpfr-$(MPFR_VER); $(call setenv,$@); \
-		$(REPODIR)/mpfr-$(MPFR_VER)/configure $(filter-out --target=$(TARGET_ARCH), $(call configure,$@)) --with-gmp=$(call arena,$@)/gmp-$(GMP_VER) --prefix=$(call arena,$@)/mpfr \
+		$(REPODIR)/mpfr-$(MPFR_VER)/configure $(call configure,$@) --with-gmp=$(call arena,$@)/gmp-$(GMP_VER) --target=$(call host,$@) --prefix=$(call arena,$@)/mpfr \
 			&& $(MAKE) \
 			&& $(MAKE) install) >> $(call log,$@) 2>&1
 	touch $@
+
+# ./configure cannot comprehend cross-toolchain output
+.stage.MACOSARM.gmp .stage.MACOSX86.gmp: CONFIGURE_GMP := --disable-assembly
 
 # Build binutils
 .stage.%.binutils-config: .stage.%.gmp
