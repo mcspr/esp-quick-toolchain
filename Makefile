@@ -307,10 +307,16 @@ configure += --disable-libmudflap
 configure += --disable-nls
 configure += --disable-multilib
 configure += --disable-bootstrap
+configure += --disable-hosted-libstdcxx
 configure += --enable-languages=c,c++
 configure += --enable-lto
 configure += --enable-static=yes
 configure += --disable-libstdcxx-verbose
+
+ifeq ($(GCC), 14.2)
+configure += --enable-libstdcxx-static-eh-pool
+configure += --with-libstdcxx-eh-pool-obj-count=4
+endif
 
 # Newlib configuration common
 CONFIGURENEWLIBCOM  = --with-newlib
