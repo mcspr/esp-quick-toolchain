@@ -138,6 +138,8 @@ else
     $(error Need to specify a supported GCC version "GCC={4.8, 4.9, 5.2, 7.2, 9.3, 10.1, 10.2, 10.3, 14.2}")
 endif
 
+TARGET_ARCH := xtensa-lx106-elf
+
 # MKSPIFFS must stay at 0.2.0 until Arduino boards.txt.py fixes non-page-aligned sizes
 MKSPIFFS_BRANCH := 0.2.0
 
@@ -299,7 +301,7 @@ install = $(PWD)/xtensa-lx106-elf$($(call arch,$(1))_EXT)
 configure  = --prefix=$(call install,$(1))
 configure += --build=$(shell gcc -dumpmachine)
 configure += --host=$(call host,$(1))
-configure += --target=xtensa-lx106-elf
+configure += --target=$(TARGET_ARCH)
 configure += --disable-shared
 configure += --with-newlib
 configure += --enable-threads=no
@@ -319,6 +321,12 @@ configure += --enable-libstdcxx-static-eh-pool
 configure += --with-libstdcxx-eh-pool-obj-count=4
 endif
 
+# Shared dependencies
+configure_gmp_mpfr = \
+	--with-gmp=$(call arena,$(1))/gmp \
+	--with-mpfr=$(call arena,$(1))/mpfr \
+	--disable-sim
+
 # Newlib configuration common
 CONFIGURENEWLIBCOM  = --with-newlib
 CONFIGURENEWLIBCOM += --enable-multilib
@@ -328,7 +336,7 @@ CONFIGURENEWLIBCOM += --enable-newlib-nano-formatted-io
 CONFIGURENEWLIBCOM += --enable-newlib-reent-small
 CONFIGURENEWLIBCOM += --enable-target-optspace
 CONFIGURENEWLIBCOM += --disable-option-checking
-CONFIGURENEWLIBCOM += --target=xtensa-lx106-elf
+CONFIGURENEWLIBCOM += --target=$(TARGET_ARCH)
 CONFIGURENEWLIBCOM += --disable-shared
 
 # Configuration for newlib normal build
@@ -442,11 +450,10 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	    echo "-------- getting $${name}" ; \
 	    cd $(REPODIR) && ( test -r $${archive} || wget $${url} ) ; \
 	    case "$${ext}" in \
-	        bz2) (cd $(REPODIR)/$(GCC_DIR); tar xfj $(REPODIR)/$${archive});; \
-	        gz)  (cd $(REPODIR)/$(GCC_DIR); tar xfz $(REPODIR)/$${archive});; \
-	        xz)  (cd $(REPODIR)/$(GCC_DIR); tar xfJ $(REPODIR)/$${archive});; \
+	        bz2) (cd $(REPODIR); tar xfj $${archive};);; \
+	        gz)  (cd $(REPODIR); tar xfz $${archive};);; \
+	        xz)  (cd $(REPODIR); tar xfJ $${archive};);; \
 	    esac ; \
-	    (cd $(REPODIR)/$(GCC_DIR); rm -rf $${base}; ln -s $${name} $${base}) \
 	done >> $(call log,$@) 2>&1
 	(cd $(REPODIR)/$(GCC_DIR); tar xfz ../../blobs/libelf-0.8.13.tar.gz; rm -rf libelf; ln -s libelf-0.8.13 libelf) >> $(call log,$@) 2>&1
 	touch $@
@@ -496,12 +503,32 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	mkdir -p $(call arena,$@) > $(call log,$@) 2>&1
 
+# Shared dependencies
+.stage.%.gmp: .stage.%.start
+	echo STAGE: $@
+	(cd $(call arena,$@); \
+        rm -rf gmp gmp-$(GMP_VER) mpfr mpfr-$(MPFR_VER)) > $(call log,$@) 2>&1
+	(cd $(call arena,$@); \
+		mkdir gmp gmp-$(GMP_VER); \
+		mkdir mpfr mpfr-$(MPFR_VER)) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/gmp-$(GMP_VER); $(call setenv,$@); \
+		$(REPODIR)/gmp-$(GMP_VER)/configure $(filter-out --target=$(TARGET_ARCH), $(call configure,$@)) --prefix=$(call arena,$@)/gmp \
+			&& $(MAKE) \
+			&& $(MAKE) install) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/mpfr-$(MPFR_VER); $(call setenv,$@); \
+		$(REPODIR)/mpfr-$(MPFR_VER)/configure $(filter-out --target=$(TARGET_ARCH), $(call configure,$@)) --with-gmp=$(call arena,$@)/gmp-$(GMP_VER) --prefix=$(call arena,$@)/mpfr \
+			&& $(MAKE) \
+			&& $(MAKE) install) >> $(call log,$@) 2>&1
+	touch $@
+
 # Build binutils
-.stage.%.binutils-config: .stage.%.start
+.stage.%.binutils-config: .stage.%.gmp
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(BINUTILS_DIR) > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/$(BINUTILS_DIR) >> $(call log,$@) 2>&1
-	(cd $(call arena,$@)/$(BINUTILS_DIR); $(call setenv,$@); $(REPODIR)/$(BINUTILS_DIR)/configure $(call configure,$@)) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(BINUTILS_DIR); \
+		$(call setenv,$@); \
+		$(REPODIR)/$(BINUTILS_DIR)/configure $(call configure_gmp_mpfr,$@) $(call configure,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.binutils-make: .stage.%.binutils-config
@@ -516,13 +543,11 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(GCC_DIR) > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/$(GCC_DIR) >> $(call log,$@) 2>&1
-	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(REPODIR)/$(GCC_DIR)/gmp/configure) > $(call log,$@) 2>&1
-	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(REPODIR)/$(GCC_DIR)/configure $(call configure,$@)) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(REPODIR)/$(GCC_DIR)/configure $(call configure_gmp_mpfr,$@) $(call configure,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.gcc1-make: .stage.%.gcc1-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); cd gmp; $(MAKE)) > $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(MAKE) all-gcc; $(MAKE) install-gcc) > $(call log,$@) 2>&1
 	touch $@
 
