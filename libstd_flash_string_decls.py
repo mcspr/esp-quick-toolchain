@@ -341,7 +341,7 @@ def worker(root: pathlib.Path, p: pathlib.Path, tagged_rules):
             raise ValueError(f"{p} found no suitable anchor")
 
         sub = prepare_decls(inst.decls, anchor)
-        return (p, out.replace(anchor, sub))
+        return (p, out.replace(anchor, sub, 1))
 
 
 RULES = {
