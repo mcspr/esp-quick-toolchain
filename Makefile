@@ -309,7 +309,6 @@ configure += --disable-libmudflap
 configure += --disable-nls
 configure += --disable-multilib
 configure += --disable-bootstrap
-configure += --disable-hosted-libstdcxx
 configure += --enable-languages=c,c++
 configure += --enable-lto
 configure += --enable-static=yes
