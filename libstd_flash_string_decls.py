@@ -10,6 +10,7 @@
 from typing import Tuple, List, Dict, Optional
 
 import os
+import warnings
 import argparse
 import concurrent.futures
 import sys
@@ -105,7 +106,7 @@ rule:
 """
 
 # throwing from utility funcs
-THROWING_RULE_TMPL = """
+THROWING_RULE_TMPL = r"""
 utils:
   finder:
     any:
@@ -114,8 +115,7 @@ utils:
 
   throwing-function:
     kind: call_expression
-    pattern:
-      context: %%NAME%%($$$)
+    regex: %%NAME%%\(
 
   localizable-macro:
     kind: argument_list
@@ -140,17 +140,17 @@ utils:
   find-concatenated-string:
     kind: concatenated_string
     inside:
-      kind: argument_list
-      inside:
-        any:
-          - matches: localizable-macro
-          - matches: throwing-function
+      any:
+        - matches: localizable-macro
+        - matches: throwing-function
 
 rule:
   matches: finder
 """
 
 # manually extracted via `git grep '__throw.*(const char'`
+# nb. sometimes it is std::..., sometimes as-is.
+# rule should match both naming convetions
 THROWING_FUNC_NAMES = [
     # std/optional
     "__throw_bad_optional_access",
@@ -184,8 +184,7 @@ NS_INSERT_ANCHORS = [
 
 
 def make_throwing_rule(name):
-    raw = THROWING_RULE_TMPL.replace("%%NAME%%", name)
-    return yaml.load(raw, Loader=yaml.CLoader)
+    return yaml.load(THROWING_RULE_TMPL.replace("%%NAME%%", name), Loader=yaml.CLoader)
 
 
 def is_ignored(p: pathlib.Path) -> bool:
@@ -294,13 +293,30 @@ def worker(root: pathlib.Path, p: pathlib.Path, tagged_rules):
             for result in node.find_all(rule):
                 inst.process(tag, result)
 
-    def find_insert_anchor(data) -> Tuple[Optional[str], int]:
-        for m in NS_INSERT_ANCHORS:
-            count = data.count(m)
-            if count:
-                return (m, count)
+    def find_insert_anchor(data) -> Optional[str]:
+        found = {}
 
-        return (None, 0)
+        for m in NS_INSERT_ANCHORS:
+            try:
+                found[m] = (
+                    data.index(m),
+                    data.count(m),
+                )
+            except ValueError:
+                pass
+
+        items = found.items()
+        if not items:
+            return None
+
+        indexed = sorted(items, key=lambda x: x[1][0])
+        anchor, (index, count) = indexed[0]
+
+        # XXX known headers, known to work
+        if count > 2 and not p.name in ["basic_string.h"]:
+            warnings.warn(f'{p} has more than one anchor "{anchor}"')
+
+        return anchor
 
     def prepare_decls(decls: List[str], anchor: str) -> str:
         return "\n".join(
@@ -320,12 +336,9 @@ def worker(root: pathlib.Path, p: pathlib.Path, tagged_rules):
     if inst.pending():
         out = node.commit_edits(inst.edits)
 
-        anchor, count = find_insert_anchor(out)
+        anchor = find_insert_anchor(data)
         if not anchor:
-            raise ValueError(f"{p} has no suitable anchor")
-
-        if count > 2:
-            raise ValueError(f'{p} has more than one anchor "{anchor}"')
+            raise ValueError(f"{p} found no suitable anchor")
 
         sub = prepare_decls(inst.decls, anchor)
         return (p, out.replace(anchor, sub))
@@ -410,6 +423,6 @@ if __name__ == "__main__":
                 print(f"{p} already modified", file=args.output)
                 continue
 
-            print(p, file=args.output)
+            print(f"Modifying {p}", file=args.output)
             with p.open("w") as f:
                 f.write(data)
