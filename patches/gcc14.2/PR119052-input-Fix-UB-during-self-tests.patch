@@ -1,0 +1,82 @@
+From dfdbad87aeb2deff9e13a394659ac7b37173648a Mon Sep 17 00:00:00 2001
+From: Jakub Jelinek <jakub@redhat.com>
+Date: Sat, 1 Mar 2025 16:09:07 +0100
+Subject: [PATCH] input: Fix UB during self-tests [PR119052]
+
+As the comment in check_line says:
+  /* get_buffer is not null terminated, but the sscanf stops after a number.  */
+the buffer is not null terminated, there is line.length () to determine
+the size of the line.  But unlike what the comment says, sscanf actually
+still requires null terminated string argument, anything else is UB.
+E.g. glibc when initializing the temporary FILE stream for the string does
+  if (size == 0)
+    end = strchr (ptr, '\0');
+and this strchr/rawmemchr is what shows up in valgrind report on cc1/cc1plus
+doing self-tests.
+
+The function is used only in a test with 1000 lines, each containg its
+number, so numbers from 1 to 1000 inclusive (each time with '\n' separator,
+but that isn't included in line.length ()).
+
+So the function just uses a temporary buffer which can fit numbers from 1 to
+1000 as strings with terminating '\0' and runs sscanf on that (why not
+strtoul?).
+
+Furthermore, the caller allocated number of lines * 15 bytes for the
+string, but 1000\n is 5 bytes, so I think * 5 is more than enough.
+
+2025-03-01  Jakub Jelinek  <jakub@redhat.com>
+
+	PR other/119052
+	* input.cc (check_line): Don't call sscanf on non-null terminated
+	buffer, instead copy line.length () bytes from line.get_buffer ()
+	to a local buffer, null terminate it and call sscanf on that.
+	Formatting fix.
+	(test_replacement): Just allocate maxline * 5 rather than maxline * 15
+	bytes for the file.  Formatting fix.
+---
+ gcc/input.cc | 17 ++++++++++++-----
+ 1 file changed, 12 insertions(+), 5 deletions(-)
+
+diff --git a/gcc/input.cc b/gcc/input.cc
+index 797cc9925c1..fabfbfb6eaa 100644
+--- a/gcc/input.cc
++++ b/gcc/input.cc
+@@ -2361,22 +2361,29 @@ test_make_location_nonpure_range_endpoints (const line_table_case &case_)
+ 
+ /* Verify reading of a specific line LINENUM in TMP, FC.  */
+ 
+-static void check_line (temp_source_file &tmp, file_cache &fc, int linenum)
++static void
++check_line (temp_source_file &tmp, file_cache &fc, int linenum)
+ {
+   char_span line = fc.get_source_line (tmp.get_filename (), linenum);
+   int n;
+-  /* get_buffer is not null terminated, but the sscanf stops after a number.  */
+-  ASSERT_TRUE (sscanf (line.get_buffer (), "%d", &n) == 1);
++  const char *b = line.get_buffer ();
++  size_t l = line.length ();
++  char buf[5];
++  ASSERT_LT (l, 5);
++  memcpy (buf, b, l);
++  buf[l] = '\0';
++  ASSERT_TRUE (sscanf (buf, "%d", &n) == 1);
+   ASSERT_EQ (n, linenum);
+ }
+ 
+ /* Test file cache replacement.  */
+ 
+-static void test_replacement ()
++static void
++test_replacement ()
+ {
+   const int maxline = 1000;
+ 
+-  char *vec = XNEWVEC (char, maxline * 15);
++  char *vec = XNEWVEC (char, maxline * 5);
+   char *p = vec;
+   int i;
+   for (i = 1; i <= maxline; i++)
+-- 
+2.49.0
+
