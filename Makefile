@@ -468,7 +468,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	    test -r "$$p" || continue ; \
 	    (cd $(REPODIR)/$(BINUTILS_DIR); echo "---- $$p:"; patch -s -p1 < $$p) ; \
 	done >> $(call log,$@) 2>&1
-	for p in $(PATCHDIR)/lib-*.patch; do \
+	for p in $(PATCHDIR)/lib-*.patch $(PATCHDIR)/gcc$(GCC)/lib-*.patch; do \
 	    test -r "$$p" || continue ; \
 	    (cd $(REPODIR)/newlib; echo "---- $$p: "; patch -s -p1 < $$p) ; \
 	done >> $(call log,$@) 2>&1
