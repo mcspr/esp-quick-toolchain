@@ -159,15 +159,17 @@ MPC_URL := https://ftp.gnu.org/gnu/mpc/mpc-$(MPC_VER).tar.gz
 CLOOG_VER := 0.18.1
 CLOOG_URL := https://github.com/periscop/cloog/releases/download/cloog-$(CLOOG_VER)/cloog-$(CLOOG_VER).tar.gz
 
-LIBELF_URL := https://github.com/earlephilhower/esp-quick-toolchain/raw/master/blobs/libelf-0.8.13.tar.gz
-
 URLS := \
 	$(ISL_URL) \
 	$(GMP_URL) \
 	$(MPFR_URL) \
-	$(CLOOG_URL) \
-	$(MPC_URL) \
-	$(LIBELF_URL)
+	$(MPC_URL)
+
+ifeq ($(GCC), 4.8)
+	URLS += $(CLOOG_URL)
+else ifeq ($(GCC), 4.9)
+	URLS += $(CLOOG_URL)
+endif
 
 # LTO doesn't work on 4.8, may not be useful later
 LTO := $(if $(lto),$(lto),false)
@@ -441,12 +443,13 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	    echo "-------- getting $${name}" ; \
 	    cd $(REPODIR) && ( test -r $${archive} || wget $${url} ) ; \
 	    case "$${ext}" in \
-	        bz2) (cd $(REPODIR)/$(GCC_DIR); tar xfj ../$${archive});; \
-	        gz)  (cd $(REPODIR)/$(GCC_DIR); tar xfz ../$${archive});; \
-	        xz)  (cd $(REPODIR)/$(GCC_DIR); tar xfJ ../$${archive});; \
+	        bz2) (cd $(REPODIR)/$(GCC_DIR); tar xfj $(REPODIR)/$${archive});; \
+	        gz)  (cd $(REPODIR)/$(GCC_DIR); tar xfz $(REPODIR)/$${archive});; \
+	        xz)  (cd $(REPODIR)/$(GCC_DIR); tar xfJ $(REPODIR)/$${archive});; \
 	    esac ; \
 	    (cd $(REPODIR)/$(GCC_DIR); rm -rf $${base}; ln -s $${name} $${base}) \
 	done >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/$(GCC_DIR); tar xfz ../../blobs/libelf-0.8.13.tar.gz; rm -rf libelf; ln -s libelf-0.8.13 libelf) >> $(call log,$@) 2>&1
 	touch $@
 
 # Checkout any required branches
