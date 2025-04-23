@@ -143,29 +143,39 @@ TARGET_ARCH := xtensa-lx106-elf
 # MKSPIFFS must stay at 0.2.0 until Arduino boards.txt.py fixes non-page-aligned sizes
 MKSPIFFS_BRANCH := 0.2.0
 
-# GNU tools downloads usually live here
-GNU_HTTP := https://gcc.gnu.org/pub/gcc/infrastructure
+# libelf shared by the repo here
+LIBELF_VER = 0.8.13
+LIBELF_BLOB = $(PWD)/blobs/libelf-$(LIBELF_VER).tar.gz
 
 # GNU GDB & the rest of external dependencies
-ISL_URL := https://libisl.sourceforge.io/isl-$(ISL).tar.xz
+ISL_URL = https://libisl.sourceforge.io/isl-$(ISL).tar.xz
 
-GMP_VER := 6.3.0
-GMP_URL := https://gmplib.org/download/gmp/gmp-$(GMP_VER).tar.xz
+GMP_VER = 6.3.0
+GMP_URL = https://gmplib.org/download/gmp/gmp-$(GMP_VER).tar.xz
 
-MPFR_VER := 4.2.2
-MPFR_URL := https://www.mpfr.org/mpfr-current/mpfr-$(MPFR_VER).tar.xz
+MPFR_VER = 4.2.2
+MPFR_URL = https://www.mpfr.org/mpfr-current/mpfr-$(MPFR_VER).tar.xz
 
-MPC_VER := 1.3.1
-MPC_URL := https://ftp.gnu.org/gnu/mpc/mpc-$(MPC_VER).tar.gz
+MPC_VER = 1.3.1
+MPC_URL = https://ftp.gnu.org/gnu/mpc/mpc-$(MPC_VER).tar.gz
 
-CLOOG_VER := 0.18.1
-CLOOG_URL := https://github.com/periscop/cloog/releases/download/cloog-$(CLOOG_VER)/cloog-$(CLOOG_VER).tar.gz
+CLOOG_VER = 0.18.1
+CLOOG_URL = https://github.com/periscop/cloog/releases/download/cloog-$(CLOOG_VER)/cloog-$(CLOOG_VER).tar.gz
+
+LIBEXPAT_VER = 2.7.1
+LIBEXPAT_REV = R_$(subst .,_,$(LIBEXPAT_VER))
+LIBEXPAT_URL = https://github.com/libexpat/libexpat/releases/download/$(LIBEXPAT_REV)/expat-$(LIBEXPAT_VER).tar.bz2
+
+NCURSES_VER = 8d252361ceeb3db4f8dec861e0fb414352e88b13
+NCURSES_URL = https://github.com/ThomasDickey/ncurses-snapshots/archive/$(NCURSES_VER).zip
 
 URLS := \
-	$(ISL_URL) \
 	$(GMP_URL) \
+	$(ISL_URL) \
+	$(LIBEXPAT_URL) \
+	$(MPC_URL) \
 	$(MPFR_URL) \
-	$(MPC_URL)
+	$(NCURSES_URL)
 
 ifeq ($(GCC), 4.8)
 	URLS += $(CLOOG_URL)
@@ -248,8 +258,17 @@ MACOSARM_TARCMD := tar
 MACOSARM_TAROPT := zcf
 MACOSARM_TAREXT := tar.gz
 MACOSARM_ASYS   := darwin_arm64
-MACOSARM_OVER   := CC=$(MACOSARM_HOST)-cc CXX=$(MACOSARM_HOST)-c++ STRIP=touch
 MACOSARM_STATIC := -lc -lc++
+
+# 1. --disable-lto , per immediately broken mpfr builds
+#    also disabled in pico toolchain, which uses the same osxcross dist
+# 2. macOS cross tools have to be explicitly stated when configuring build env
+#    host & target arch autodetection does not work for some reason and uses local gcc instead
+MACOSARM_CONFIGURE_VARS := \
+	--disable-lto \
+	CC=$(MACOSARM_HOST)-cc \
+	CXX=$(MACOSARM_HOST)-c++ \
+	STRIP=touch
 
 ARM64_HOST   := aarch64-linux-gnu
 ARM64_AHOST  := aarch64-linux-gnu
@@ -290,6 +309,9 @@ log    = log$(1)
 # For package.json
 asys   = $($(call arch,$(1))_ASYS)
 
+# sometimes called for ./configure
+configure_vars = $($(call arch,$(1))_CONFIGURE_VARS)
+
 # The build directory per architecture
 arena = $(PWD)/arena$(call ext,$(1))
 # The architecture for this recipe
@@ -315,6 +337,7 @@ configure += --enable-languages=c,c++
 configure += --enable-lto
 configure += --enable-static=yes
 configure += --disable-libstdcxx-verbose
+configure += $(call configure_vars,$(1))
 
 ifeq ($(GCC), 14.2)
 configure += --enable-libstdcxx-static-eh-pool
@@ -323,9 +346,21 @@ endif
 
 # Shared dependencies
 configure_gmp_mpfr = \
-	--with-gmp=$(call arena,$(1))/gmp \
-	--with-mpfr=$(call arena,$(1))/mpfr \
-	--disable-sim
+	--with-gmp=$(call arena,$(1))/cross \
+	--with-mpfr=$(call arena,$(1))/cross
+
+configure_ncurses = \
+	--without-progs \
+	--without-manpages \
+	--without-shared \
+	--without-tack \
+	--without-tests \
+	--disable-widec \
+	--with-termlib
+
+configure_expat = \
+	--without-tests \
+	--without-examples
 
 # Newlib configuration common
 CONFIGURENEWLIBCOM  = --with-newlib
@@ -347,6 +382,12 @@ configurenewlib += $(CONFIGURENEWLIBCOM)
 CONFIGURENEWLIBINSTALL  = --prefix=$(ARDUINO)/tools/sdk/libc
 CONFIGURENEWLIBINSTALL += --with-target-subdir=xtensa-lx106-elf
 CONFIGURENEWLIBINSTALL += $(CONFIGURENEWLIBCOM)
+
+# Configuration specific to macOS
+
+# GMP tries to test .s, which breaks on ./configure stage
+CONFIGURE_GMP_MACOSARM := --disable-assembly
+CONFIGURE_GMP_MACOSX86 := $(CONFIGURE_GMP_MACOSARM)
 
 # The branch in which to store the new toolchain
 INSTALLBRANCH ?= master
@@ -395,16 +436,17 @@ makejson = tarballsize=$$(stat -c%s $${tarball}); \
 
 linux default: .stage.LINUX.done
 
-.PRECIOUS: .stage.% .stage.%.%
+.PRECIOUS: .stage.% .stage.%.% .stage.%.deps .stage.%.gdb-deps
 
-.PHONY: .stage.download
+.PHONY: .stage.gits .stage.blobs
 
 # Build all toolchain versions
 all: .stage.LINUX.done .stage.LINUX32.done .stage.WIN32.done .stage.WIN64.done .stage.MACOSX86.done .stage.MACOSARM.done .stage.ARM64.done .stage.RPI.done
 	echo STAGE: $@
 	echo All complete
 
-download: .stage.download
+
+download: .stage.gits .stage.blobs
 
 # Other cross-compile cannot start until Linux is built
 .stage.LINUX32.gcc1-make .stage.WIN32.gcc1-make .stage.WIN64.gcc1-make .stage.MACOSX86.gcc1-make .stage.MACOSARM.gcc1-make .stage.ARM64.gcc1-make .stage.RPI.gcc1-make: .stage.LINUX.done
@@ -422,7 +464,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf $(call arena,$@) > /dev/null 2>&1
 
 # Download the needed GIT and tarballs
-.stage.download:
+.stage.gitclone:
 	echo STAGE: $@
 	mkdir -p $(REPODIR) > $(call log,$@) 2>&1
 	(test -d $(REPODIR)/$(BINUTILS_DIR) || git clone $(BINUTILS_REPO)                               $(REPODIR)/$(BINUTILS_DIR) ) >> $(call log,$@) 2>&1
@@ -439,23 +481,44 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	cd $(REPODIR)/$(call arch,$@) && git reset --hard HEAD && git clean -f -d
 
+.clean.%.deps:
+	echo STAGE: $@
+	rm -rf $(call arena,$@)/cross
+
 .clean.gits: .clean.$(BINUTILS_DIR).git .clean.$(GCC_DIR).git .clean.newlib.git .clean.newlib.git .clean.lx106-hal.git .clean.mkspiffs.git .clean.esptool.git .clean.mklittlefs.git
 
-# Prep the git repos with no patches and any required libraries for gcc
-.stage.prepgit: .stage.download .clean.gits
+# Prep externally fetched urls & local archives
+.stage.blobs:
 	echo STAGE: $@
-	for i in binutils-gdb gcc newlib lx106-hal mkspiffs mklittlefs esptool; do cd $(REPODIR)/$$i && git reset --hard HEAD && git submodule init && git submodule update && git clean -f -d; done > $(call log,$@) 2>&1
 	for url in $(URLS) ; do \
 	    archive=$${url##*/}; name=$${archive%.t*}; base=$${name%-*}; ext=$${archive##*.} ; \
-	    echo "-------- getting $${name}" ; \
-	    cd $(REPODIR) && ( test -r $${archive} || wget $${url} ) ; \
+	    echo "-------- getting $${url}" ; \
+	    cd $(REPODIR) && ( test -r $${archive} || wget -o ${{archive}} $${url} ) ; \
 	    case "$${ext}" in \
-	        bz2) (cd $(REPODIR); tar xfj $${archive};);; \
-	        gz)  (cd $(REPODIR); tar xfz $${archive};);; \
-	        xz)  (cd $(REPODIR); tar xfJ $${archive};);; \
+	        bz2) (cd $(REPODIR); tar -x --bzip2 -f $${archive};);; \
+	        gz)  (cd $(REPODIR); tar -x --gzip -f $${archive};);; \
+	        lz)  (cd $(REPODIR); tar -x --lzip -f $${archive};);; \
+	        xz)  (cd $(REPODIR); tar -x --lzma -f $${archive};);; \
+	        zip) (cd $(REPODIR); unzip -u $${archive};);; \
 	    esac ; \
 	done >> $(call log,$@) 2>&1
-	(cd $(REPODIR)/$(GCC_DIR); tar xfz ../../blobs/libelf-0.8.13.tar.gz; rm -rf libelf; ln -s libelf-0.8.13 libelf) >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/$(GCC_DIR); \
+		echo "-------- unpacking $(LIBELF_BLOB)" ; \
+		tar xfz $(LIBELF_BLOB); \
+		rm -rf libelf; \
+		ln -s libelf-$(LIBELF_VER) libelf) >> $(call log,$@) 2>&1
+	touch $@
+
+# Prep the git repos with no patches and any required libraries for gcc & binutils-gdb
+.stage.prepgit: .stage.gits .clean.gits .stage.blobs
+	echo STAGE: $@
+	for i in binutils-gdb gcc newlib lx106-hal mkspiffs mklittlefs esptool; do \
+		cd $(REPODIR)/$$i \
+		&& git reset --hard HEAD \
+		&& git submodule init \
+		&& git submodule update \
+		&& git clean -f -d ; \
+	done > $(call log,$@) 2>&1
 	touch $@
 
 # Checkout any required branches
@@ -499,7 +562,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	./libstd_flash_string_decls.py --root $(REPODIR)/$(GCC_DIR)/libstdc++-v3/include >> $(call log,$@) 2>&1
 	touch $@
 
-.stage.%.start: .stage.patch
+.stage.%.start: .stage.patch .clean.%.deps
 	echo STAGE: $@
 	mkdir -p $(call arena,$@) > $(call log,$@) 2>&1
 
@@ -511,13 +574,12 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(cd $(call arena,$@); \
 		mkdir gmp gmp-$(GMP_VER); \
 		mkdir mpfr mpfr-$(MPFR_VER)) >> $(call log,$@) 2>&1
-	echo CALLED: $(CONFIGURE_GMP_$(@))
 	(cd $(call arena,$@)/gmp-$(GMP_VER); $(call setenv,$@); \
-		$(REPODIR)/gmp-$(GMP_VER)/configure $(CONFIGURE_GMP) $(call configure,$@) --target=$(call host,$@) --prefix=$(call arena,$@)/gmp \
+		$(REPODIR)/gmp-$(GMP_VER)/configure $(CONFIGURE_GMP) $(call configure,$@) --target=$(call host,$@) --prefix=$(call arena,$@)/cross \
 			&& $(MAKE) \
 			&& $(MAKE) install) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/mpfr-$(MPFR_VER); $(call setenv,$@); \
-		$(REPODIR)/mpfr-$(MPFR_VER)/configure $(call configure,$@) --with-gmp=$(call arena,$@)/gmp-$(GMP_VER) --target=$(call host,$@) --prefix=$(call arena,$@)/mpfr \
+		$(REPODIR)/mpfr-$(MPFR_VER)/configure $(call configure,$@) $(call configure_gmp_mpfr,$@) --target=$(call host,$@) --prefix=$(call arena,$@)/cross \
 			&& $(MAKE) \
 			&& $(MAKE) install) >> $(call log,$@) 2>&1
 	touch $@
@@ -525,19 +587,55 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 # ./configure cannot comprehend cross-toolchain output
 .stage.MACOSARM.gmp .stage.MACOSX86.gmp: CONFIGURE_GMP := --disable-assembly
 
+# GDB static build has to have up-to-date libs
+.stage.%.libexpat: .stage.%.start
+	echo STAGE: $@
+	rm -rf $(call arena,$@)/libexpat > $(call log,$@) 2>&1
+	mkdir $(call arena,$@)/libexpat >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/libexpat; \
+		cp -r $(REPODIR)/expat-$(LIBEXPAT_VER)/* ./ ; \
+		bash buildconf.sh ;\
+		./configure $(call configure,$@) $(configure_expat) --prefix=$(call arena,$@)/cross ; \
+		$(MAKE) && $(MAKE) install) >> $(call log,$@) 2>&1
+	touch $@
+
+# But only linux has to have ncurses
+.stage.%.ncurses: .stage.%.start
+	echo STAGE: $@
+	touch $@
+
+.stage.LINUX.ncurses: .stage.LINUX.start
+	echo STAGE: $@
+	rm -rf $(call arena,$@)/ncurses > $(call log,$@) 2>&1
+	mkdir $(call arena,$@)/ncurses >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/ncurses; \
+		$(REPODIR)/ncurses-snapshot-$(NCURSES_VER)/configure $(call configure,$@) $(configure_ncurses) --prefix=$(call arena,$@)/cross; \
+		$(MAKE) && $(MAKE) install) >> $(call log,$@) 2>&1
+	touch $@
+
+.stage.%.gdb-deps: .stage.%.ncurses .stage.%.libexpat
+	echo STAGE: $@
+	touch $@
+
+.stage.%.deps: .stage.%.gmp .stage.%.gdb-deps
+	echo STAGE: $@
+	touch $@
+
+.NOTPARALLEL: .stage.%.ncurses .stage.%.libexpat .stage.%.gmp
+
 # Build binutils
-.stage.%.binutils-config: .stage.%.gmp
+.stage.%.binutils-config: .stage.%.deps
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(BINUTILS_DIR) > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/$(BINUTILS_DIR) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(BINUTILS_DIR); \
 		$(call setenv,$@); \
-		$(REPODIR)/$(BINUTILS_DIR)/configure $(call configure_gmp_mpfr,$@) $(call configure,$@)) >> $(call log,$@) 2>&1
+		$(REPODIR)/$(BINUTILS_DIR)/configure --disable-sim $(call configure_gmp_mpfr,$@) $(call configure,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.binutils-make: .stage.%.binutils-config
 	echo STAGE: $@
-	# Need LDFLAGS override to guarantee gdb is made static
+	# Need LDFLAGS override from ..._BFLGS to statically link everything but base system libs (libc, libm, libstdc++, etc.)
 	(cd $(call arena,$@)/$(BINUTILS_DIR); $(call setenv,$@); $(MAKE) $(call bflgs,$@)) > $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(BINUTILS_DIR); $(call setenv,$@); $(MAKE) install) >> $(call log,$@) 2>&1
 	(cd $(call install,$@)/bin; ln -sf xtensa-lx106-elf-gcc$(call exe,$@) xtensa-lx106-elf-cc$(call exe,$@)) >> $(call log,$@) 2>&1
