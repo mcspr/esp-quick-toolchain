@@ -609,7 +609,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf $(call arena,$@)/ncurses > $(call log,$@) 2>&1
 	mkdir $(call arena,$@)/ncurses >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/ncurses; \
-		$(REPODIR)/ncurses-snapshot-$(NCURSES_VER)/configure $(call configure,$@) $(configure_ncurses) --prefix=$(call arena,$@)/cross; \
+		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure $(call configure,$@) $(configure_ncurses) --prefix=$(call arena,$@)/cross; \
 		$(MAKE) && $(MAKE) install) >> $(call log,$@) 2>&1
 	touch $@
 
