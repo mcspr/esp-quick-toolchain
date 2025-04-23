@@ -1,0 +1,46 @@
+From 3aaca06b672010329144b88f5788e379c3cc74cb Mon Sep 17 00:00:00 2001
+From: Andrew Oates <andrew@andrewoates.com>
+Date: Sun, 16 Feb 2025 16:16:25 +0100
+Subject: [PATCH] gdb: fix color_option_def compile error (clang)
+
+color_option_def was added in commit 6447969d0 ("Add an option with a
+color type."), but not used.
+
+The color_option_def constructor passes the wrong number of arguments
+to the option_def constructor.  Since color_option_def is a template and
+never actually instantiated, GCC does not fail to compile this.  clang
+generates an error (see below).
+
+This passes nullptr to the extra_literals_ option_def ctor argument,
+which matches what filename_option_def above it does.
+
+clang's generated error:
+  ../../gdb/cli/cli-option.h:343:7: error: no matching constructor for initialization of 'option_def'
+      : option_def (long_option_, var_color,
+        ^           ~~~~~~~~~~~~~~~~~~~~~~~~
+  ../../gdb/cli/cli-option.h:50:13: note: candidate constructor not viable: requires 8 arguments, but 7 were provided
+    constexpr option_def (const char *name_,
+              ^
+  ../../gdb/cli/cli-option.h:37:8: note: candidate constructor (the implicit copy constructor) not viable: requires 1 argument, but 7 were provided
+  struct option_def
+         ^
+  ../../gdb/cli/cli-option.h:37:8: note: candidate constructor (the implicit move constructor) not viable: requires 1 argument, but 7 were provided
+
+Approved-By: Tom de Vries <tdevries@suse.de>
+---
+ gdb/cli/cli-option.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gdb/cli/cli-option.h b/gdb/cli/cli-option.h
+index ac614c326d4d..38dcd8219c5e 100644
+--- a/gdb/cli/cli-option.h
++++ b/gdb/cli/cli-option.h
+@@ -340,7 +340,7 @@ struct color_option_def : option_def
+ 		    const char *set_doc_,
+ 		    const char *show_doc_ = nullptr,
+ 		    const char *help_doc_ = nullptr)
+-    : option_def (long_option_, var_color,
++    : option_def (long_option_, var_color, nullptr,
+ 		  (erased_get_var_address_ftype *) get_var_address_cb_,
+ 		  show_cmd_cb_,
+ 		  set_doc_, show_doc_, help_doc_)
