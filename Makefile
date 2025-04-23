@@ -536,7 +536,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	    test -r "$$p" || continue ; \
 	    (cd $(REPODIR)/$(GCC_DIR); echo "---- $$p:"; patch -s -p1 < $$p) ; \
 	done > $(call log,$@) 2>&1
-	for p in $(PATCHDIR)/bin-*.patch; do \
+	for p in $(PATCHDIR)/bin-*.patch $(PATCHDIR)/gcc$(GCC)/bin-*.patch; do \
 	    test -r "$$p" || continue ; \
 	    (cd $(REPODIR)/$(BINUTILS_DIR); echo "---- $$p:"; patch -s -p1 < $$p) ; \
 	done >> $(call log,$@) 2>&1
