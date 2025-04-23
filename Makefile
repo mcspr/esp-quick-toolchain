@@ -651,9 +651,6 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 .stage.%.binutils-make: BINUTILS_MAKE_LDFLAGS=-static
 .stage.MACOSARM.binutils-make .stage.MACOSX86.binutils-make: BINUTILS_MAKE_LDFLAGS = 
 
-#.stage.%.binutils-make: .stage.%.binutils-config
-
-
 .stage.%.gcc1-config: .stage.%.binutils-make
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(GCC_DIR) > $(call log,$@) 2>&1
@@ -702,18 +699,30 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/hal > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/hal >> $(call log,$@) 2>&1
-	(cd $(call arena,$@)/hal; $(call setenv,$@); $(REPODIR)/lx106-hal/configure --host=xtensa-lx106-elf $$(echo $(call configure,$@) | sed 's/--host=[a-zA-Z0-9_-]*//')) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/hal; \
+		$(call setenv,$@); \
+		$(REPODIR)/lx106-hal/configure $(call configure,$@) --host=$(TARGET_ARCH) CC=$(TARGET_ARCH)-cc) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.hal-make: .stage.%.hal-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/hal; $(call setenv,$@); $(MAKE)) > $(call log,$@) 2>&1
-	(cd $(call arena,$@)/hal; $(call setenv,$@); $(MAKE) install) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/hal; \
+		$(call setenv,$@); \
+		$(MAKE) && $(MAKE) install) > $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.strip: .stage.%.hal-make
 	echo STAGE: $@
-	($(call setenv,$@); $(call host,$@)-strip $(call install,$@)/bin/*$(call exe,$@) $(call install,$@)/libexec/gcc/xtensa-lx106-elf/*/c*$(call exe,$@) $(call install,$@)/libexec/gcc/xtensa-lx106-elf/*/lto1$(call exe,$@) || true ) > $(call log,$@) 2>&1
+	($(call setenv,$@); \
+		$(call host,$@)-strip \
+		$(call install,$@)/bin/*$(call exe,$@) \
+		$(call install,$@)/libexec/gcc/xtensa-lx106-elf/*/c*$(call exe,$@) \
+		$(call install,$@)/libexec/gcc/xtensa-lx106-elf/*/lto1$(call exe,$@) || true ) > $(call log,$@) 2>&1
+	touch $@
+
+# > aarch64-apple-darwin20.4-strip: warning: changes being made to the file will invalidate the code signature in ...
+.stage.MACOSARM.strip: .stage.MACOSARM.hal-make
+	echo STAGE: $@
 	touch $@
 
 .stage.%.post: .stage.%.strip
@@ -741,16 +750,26 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	# Dependencies borked in mkspiffs makefile, so don't use parallel make
 	(cd $(call arena,$@)/mkspiffs;\
 	    $(call setenv,$@); \
-	    TARGET_OS=$(call mktgt,$@) CC=$(call host,$@)-gcc CXX=$(call host,$@)-g++ STRIP=$(call host,$@)-strip \
-            make -j1 clean mkspiffs$(call exe,$@) BUILD_CONFIG_NAME="-arduino-esp8266" CPPFLAGS="-DSPIFFS_USE_MAGIC_LENGTH=0 -DSPIFFS_ALIGNED_OBJECT_INDEX_TABLES=1") >> $(call log,$@) 2>&1
+	    $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
+			CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=$(STRIP) \
+			BUILD_CONFIG_NAME="-arduino-esp8266" \
+			CPPFLAGS="-DSPIFFS_USE_MAGIC_LENGTH=0 -DSPIFFS_ALIGNED_OBJECT_INDEX_TABLES=1" \
+            mkspiffs$(call exe,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.mkspiffs.$(call arch,$@) >> $(call log,$@) 2>&1
 	mkdir -p pkg.mkspiffs.$(call arch,$@)/mkspiffs >> $(call log,$@) 2>&1
-	(cd pkg.mkspiffs.$(call arch,$@)/mkspiffs; $(call setenv,$@); pkgdesc="mkspiffs-utility"; pkgname="mkspiffs"; $(call makepackagejson,$@)) >> $(call log,$@) 2>&1
+	(cd pkg.mkspiffs.$(call arch,$@)/mkspiffs; \
+		$(call setenv,$@); pkgdesc="mkspiffs-utility"; pkgname="mkspiffs"; \
+		$(call makepackagejson,$@)) >> $(call log,$@) 2>&1
 	cp $(call arena,$@)/mkspiffs/mkspiffs$(call exe,$@) pkg.mkspiffs.$(call arch,$@)/mkspiffs/. >> $(call log,$@) 2>&1
-	(tarball=$(call host,$@).mkspiffs-$$(cd $(REPODIR)/mkspiffs && git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
-	    cd pkg.mkspiffs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mkspiffs; cd ..; $(call makejson,$@)) >> $(call log,$@) 2>&1
+	(tarball=$(call host,$@).mkspiffs-$$(cd $(REPODIR)/mkspiffs \
+		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
+	    cd pkg.mkspiffs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mkspiffs; \
+		cd ..; $(call makejson,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.mkspiffs.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
+
+.stage.%.mkspiffs: STRIP=$(call host,$@)-strip
+.stage.MACOSARM.mkspiffs: STRIP=touch
 
 .stage.%.mklittlefs: .stage.%.start
 	echo STAGE: $@
@@ -759,16 +778,25 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	# Dependencies borked in mklittlefs makefile, so don't use parallel make
 	(cd $(call arena,$@)/mklittlefs;\
 	    $(call setenv,$@); \
-	    TARGET_OS=$(call mktgt,$@) CC=$(call host,$@)-gcc CXX=$(call host,$@)-g++ STRIP=$(call host,$@)-strip \
-            make -j1 clean mklittlefs$(call exe,$@) BUILD_CONFIG_NAME="-arduino-esp8266") >> $(call log,$@) 2>&1
+	    $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
+			CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=$(STRIP) \
+			BUILD_CONFIG_NAME="-arduino-esp8266" \
+            mklittlefs$(call exe,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.mklittlefs.$(call arch,$@) >> $(call log,$@) 2>&1
 	mkdir -p pkg.mklittlefs.$(call arch,$@)/mklittlefs >> $(call log,$@) 2>&1
-	(cd pkg.mklittlefs.$(call arch,$@)/mklittlefs; $(call setenv,$@); pkgdesc="littlefs-utility"; pkgname="mklittlefs"; $(call makepackagejson,$@)) >> $(call log,$@) 2>&1
+	(cd pkg.mklittlefs.$(call arch,$@)/mklittlefs; \
+		$(call setenv,$@); pkgdesc="littlefs-utility"; pkgname="mklittlefs"; \
+		$(call makepackagejson,$@)) >> $(call log,$@) 2>&1
 	cp $(call arena,$@)/mklittlefs/mklittlefs$(call exe,$@) pkg.mklittlefs.$(call arch,$@)/mklittlefs/. >> $(call log,$@) 2>&1
-	(tarball=$(call host,$@).mklittlefs-$$(cd $(REPODIR)/mklittlefs && git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
-	    cd pkg.mklittlefs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mklittlefs; cd ..; $(call makejson,$@)) >> $(call log,$@) 2>&1
+	(tarball=$(call host,$@).mklittlefs-$$(cd $(REPODIR)/mklittlefs \
+		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
+	    cd pkg.mklittlefs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mklittlefs; \
+		cd ..; $(call makejson,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.mklittlefs.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
+
+.stage.%.mklittlefs: STRIP=$(call host,$@)-strip
+.stage.MACOSARM.mklittlefs: STRIP=touch
 
 .stage.%.esptool: .stage.%.start
 	echo STAGE: $@
@@ -777,19 +805,27 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	# Dependencies borked in esptool makefile, so don't use parallel make
 	(cd $(call arena,$@)/esptool;\
 	    $(call setenv,$@); \
-	    TARGET_OS=$(call mktgt,$@) CC=$(call host,$@)-gcc CXX=$(call host,$@)-g++ STRIP=$(call host,$@)-strip \
-            make -j1 clean esptool$(call exe,$@) BUILD_CONFIG_NAME="-arduino-esp8266") >> $(call log,$@) 2>&1
+	    $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
+			CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=$(STRIP) \
+			BUILD_CONFIG_NAME="-arduino-esp8266" \
+            esptool$(call exe,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.esptool.$(call arch,$@) >> $(call log,$@) 2>&1
 	mkdir -p pkg.esptool.$(call arch,$@)/esptool >> $(call log,$@) 2>&1
 	cp $(call arena,$@)/esptool/esptool$(call exe,$@) pkg.esptool.$(call arch,$@)/esptool/. >> $(call log,$@) 2>&1
-	(tarball=$(call host,$@).esptool-$$(cd $(REPODIR)/esptool && git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
-	    cd pkg.esptool.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} esptool; cd ..; $(call makejson,$@)) >> $(call log,$@) 2>&1
+	(tarball=$(call host,$@).esptool-$$(cd $(REPODIR)/esptool \
+		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
+	    cd pkg.esptool.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} esptool; \
+		cd ..; $(call makejson,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.esptool.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
+
+.stage.%.esptool: STRIP=$(call host,$@)-strip
+.stage.MACOSARM.esptool: STRIP=touch
 
 .stage.%.done: .stage.%.package .stage.%.mkspiffs .stage.%.esptool .stage.%.mklittlefs
 	echo STAGE: $@
 	echo Done building $(call arch,$@)
+	touch $@
 
 # Only the native version has to be done to install libs to GIT
 install: .stage.LINUX.install
