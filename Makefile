@@ -193,7 +193,6 @@ LINUX_AHOST  := x86_64-pc-linux-gnu
 LINUX_EXT    := .x86_64
 LINUX_EXE    := 
 LINUX_MKTGT  := linux
-LINUX_BFLGS  := LDFLAGS=-static
 LINUX_TARCMD := tar
 LINUX_TAROPT := zcf
 LINUX_TAREXT := tar.gz
@@ -205,7 +204,6 @@ LINUX32_AHOST  := i686-pc-linux-gnu
 LINUX32_EXT    := .i686
 LINUX32_EXE    := 
 LINUX32_MKTGT  := linux
-LINUX32_BFLGS  := LDFLAGS=-static
 LINUX32_TARCMD := tar
 LINUX32_TAROPT := zcf
 LINUX32_TAREXT := tar.gz
@@ -217,7 +215,6 @@ WIN32_AHOST  := i686-mingw32
 WIN32_EXT    := .win32
 WIN32_EXE    := .exe
 WIN32_MKTGT  := windows
-WIN32_BFLGS  := LDFLAGS=-static
 WIN32_TARCMD := zip
 WIN32_TAROPT := -rq
 WIN32_TAREXT := zip
@@ -229,7 +226,6 @@ WIN64_AHOST  := x86_64-mingw32
 WIN64_EXT    := .win64
 WIN64_EXE    := .exe
 WIN64_MKTGT  := windows
-WIN64_BFLGS  := LDFLAGS=-static
 WIN64_TARCMD := zip
 WIN64_TAROPT := -rq
 WIN64_TAREXT := zip
@@ -241,7 +237,6 @@ MACOSX86_AHOST  := x86_64-apple-darwin
 MACOSX86_EXT    := .macosx86
 MACOSX86_EXE    :=
 MACOSX86_MKTGT  := macosx86
-MACOSX86_BFLGS  :=
 MACOSX86_TARCMD := tar
 MACOSX86_TAROPT := zcf
 MACOSX86_TAREXT := tar.gz
@@ -253,7 +248,6 @@ MACOSARM_AHOST  := arm64-apple-darwin
 MACOSARM_EXT    := .macosarm
 MACOSARM_EXE    :=
 MACOSARM_MKTGT  := macosarm
-MACOSARM_BFLGS  :=
 MACOSARM_TARCMD := tar
 MACOSARM_TAROPT := zcf
 MACOSARM_TAREXT := tar.gz
@@ -275,7 +269,6 @@ ARM64_AHOST  := aarch64-linux-gnu
 ARM64_EXT    := .arm64
 ARM64_EXE    := 
 ARM64_MKTGT  := linux
-ARM64_BFLGS  := LDFLAGS=-static
 ARM64_TARCMD := tar
 ARM64_TAROPT := zcf
 ARM64_TAREXT := tar.gz
@@ -287,7 +280,6 @@ RPI_AHOST  := arm-linux-gnueabihf
 RPI_EXT    := .rpi
 RPI_EXE    := 
 RPI_MKTGT  := linux
-RPI_BFLGS  := LDFLAGS=-static
 RPI_TARCMD := tar
 RPI_TAROPT := zcf
 RPI_TAREXT := tar.gz
@@ -300,7 +292,6 @@ ahost  = $($(call arch,$(1))_AHOST)
 ext    = $($(call arch,$(1))_EXT)
 exe    = $($(call arch,$(1))_EXE)
 mktgt  = $($(call arch,$(1))_MKTGT)
-bflgs  = $($(call arch,$(1))_BFLGS)
 tarcmd = $($(call arch,$(1))_TARCMD)
 taropt = $($(call arch,$(1))_TAROPT)
 tarext = $($(call arch,$(1))_TAREXT)
@@ -318,6 +309,10 @@ arena = $(PWD)/arena$(call ext,$(1))
 arch = $(subst .,,$(suffix $(basename $(1))))
 # This installation directory for this architecture
 install = $(PWD)/xtensa-lx106-elf$($(call arch,$(1))_EXT)
+# Shared libraries build prefix
+cross = $(call arena,$(1))/cross
+ldflags = -L$(call cross,$(1))/lib
+cflags = -I$(call cross,$(1))/include
 
 # GCC et. al configure options
 configure  = --prefix=$(call install,$(1))
@@ -350,17 +345,18 @@ configure_gmp_mpfr = \
 	--with-mpfr=$(call arena,$(1))/cross
 
 configure_ncurses = \
-	--without-progs \
+	--disable-widec \
 	--without-manpages \
+	--without-progs \
 	--without-shared \
 	--without-tack \
 	--without-tests \
-	--disable-widec \
-	--with-termlib
+	--with-termlib \
+	--with-versioned-syms
 
 configure_expat = \
-	--without-tests \
-	--without-examples
+	--without-examples \
+	--without-tests
 
 # Newlib configuration common
 CONFIGURENEWLIBCOM  = --with-newlib
@@ -400,14 +396,18 @@ else ifeq ($(LTO),false)
 else
     $(error Need to specify LTO={true,false} on the command line)
 endif
+
+# Generic opts passed to both CC and CXX
+SHARED_OPT_FLAGS := -pipe -g -O2
+
 # Sets the environment variables for a subshell while building
 setenv = export CFLAGS_FOR_TARGET=$(CFFT); \
-         export CXXFLAGS_FOR_TARGET=$(CFFT); \
-         export CFLAGS="-I$(call install,$(1))/include -pipe -g -O2"; \
-         export CXXFLAGS="-pipe -g -O2"; \
-         export LDFLAGS="-L$(call install,$(1))/lib"; \
-         export PATH="$(call install,.stage.LINUX.stage)/bin:$${PATH}"; \
-         export LD_LIBRARY_PATH="$(call install,.stage.LINUX.stage)/lib:$${LD_LIBRARY_PATH}"
+		 export CXXFLAGS_FOR_TARGET=$(CFFT); \
+		 export CFLAGS="$(call cflags,$(1)) $(SHARED_OPT_FLAGS)"; \
+		 export CXXFLAGS="$(SHARED_OPT_FLAGS)"; \
+		 export LDFLAGS="$(call ldflags,$(1))"; \
+		 export PATH="$(call cross,$(1))/bin:$(call install,.stage.LINUX.stage)/bin:$${PATH}"; \
+		 export LD_LIBRARY_PATH="$(call cross,$(1))/lib:$${LD_LIBRARY_PATH}"
 
 # Creates a package.json file for PlatformIO
 # Package version **must** conform with Semantic Versioning specicfication:
@@ -599,7 +599,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 		$(MAKE) && $(MAKE) install) >> $(call log,$@) 2>&1
 	touch $@
 
-# But only linux has to have ncurses
+# But only linux has to have ncurses.
+# Note libtermcap.a <-> libtinfo.a has to happen b/c gdb later links with the system one
 .stage.%.ncurses: .stage.%.start
 	echo STAGE: $@
 	touch $@
@@ -608,9 +609,11 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/ncurses > $(call log,$@) 2>&1
 	mkdir $(call arena,$@)/ncurses >> $(call log,$@) 2>&1
-	(cd $(call arena,$@)/ncurses; \
-		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure $(call configure,$@) $(configure_ncurses) --prefix=$(call arena,$@)/cross; \
+	(cd $(call arena,$@)/ncurses ; \
+		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure $(call configure,$@) $(configure_ncurses) --prefix=$(call arena,$@)/cross ; \
 		$(MAKE) && $(MAKE) install) >> $(call log,$@) 2>&1
+	(cd $(call cross,$@)/lib ; \
+		ln -s libtinfo.a libtermcap.a) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.gdb-deps: .stage.%.ncurses .stage.%.libexpat
@@ -623,7 +626,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 
 .NOTPARALLEL: .stage.%.ncurses .stage.%.libexpat .stage.%.gmp
 
-# Build binutils
+# Build binutils & gdb
 .stage.%.binutils-config: .stage.%.deps
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(BINUTILS_DIR) > $(call log,$@) 2>&1
@@ -635,17 +638,29 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 
 .stage.%.binutils-make: .stage.%.binutils-config
 	echo STAGE: $@
-	# Need LDFLAGS override from ..._BFLGS to statically link everything but base system libs (libc, libm, libstdc++, etc.)
-	(cd $(call arena,$@)/$(BINUTILS_DIR); $(call setenv,$@); $(MAKE) $(call bflgs,$@)) > $(call log,$@) 2>&1
-	(cd $(call arena,$@)/$(BINUTILS_DIR); $(call setenv,$@); $(MAKE) install) >> $(call log,$@) 2>&1
-	(cd $(call install,$@)/bin; ln -sf xtensa-lx106-elf-gcc$(call exe,$@) xtensa-lx106-elf-cc$(call exe,$@)) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(BINUTILS_DIR); \
+		$(call setenv,$@); \
+		$(MAKE) LDFLAGS="$(BINUTILS_MAKE_LDFLAGS) $$LDFLAGS" \
+		&& $(MAKE) install) > $(call log,$@) 2>&1
+	(cd $(call install,$@)/bin; \
+		ln -sf xtensa-lx106-elf-gcc$(call exe,$@) xtensa-lx106-elf-cc$(call exe,$@)) >> $(call log,$@) 2>&1
 	touch $@
+
+# statically link w/ the expat & ncurses & gmp & mpfr that were built locally
+# (nb. original code shadowed 'export LDFLAGS=...' via 'make LDFLAGS=...')
+.stage.%.binutils-make: BINUTILS_MAKE_LDFLAGS=-static
+.stage.MACOSARM.binutils-make .stage.MACOSX86.binutils-make: BINUTILS_MAKE_LDFLAGS = 
+
+#.stage.%.binutils-make: .stage.%.binutils-config
+
 
 .stage.%.gcc1-config: .stage.%.binutils-make
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(GCC_DIR) > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/$(GCC_DIR) >> $(call log,$@) 2>&1
-	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(REPODIR)/$(GCC_DIR)/configure $(call configure_gmp_mpfr,$@) $(call configure,$@)) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(GCC_DIR); \
+		$(call setenv,$@); \
+		$(REPODIR)/$(GCC_DIR)/configure $(call configure_gmp_mpfr,$@) $(call configure,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.gcc1-make: .stage.%.gcc1-config
