@@ -197,7 +197,6 @@ LINUX_TARCMD := tar
 LINUX_TAROPT := zcf
 LINUX_TAREXT := tar.gz
 LINUX_ASYS   := linux_x86_64
-LINUX_STATIC := -static-libgcc -static-libstdc++
 
 LINUX32_HOST   := i686-linux-gnu
 LINUX32_AHOST  := i686-pc-linux-gnu
@@ -208,7 +207,6 @@ LINUX32_TARCMD := tar
 LINUX32_TAROPT := zcf
 LINUX32_TAREXT := tar.gz
 LINUX32_ASYS   := linux_i686
-LINUX32_STATIC := -static-libgcc -static-libstdc++
 
 WIN32_HOST   := i686-w64-mingw32
 WIN32_AHOST  := i686-mingw32
@@ -219,7 +217,6 @@ WIN32_TARCMD := zip
 WIN32_TAROPT := -rq
 WIN32_TAREXT := zip
 WIN32_ASYS   := windows_x86
-WIN32_STATIC := -static-libgcc -static-libstdc++
 
 WIN64_HOST   := x86_64-w64-mingw32
 WIN64_AHOST  := x86_64-mingw32
@@ -230,7 +227,6 @@ WIN64_TARCMD := zip
 WIN64_TAROPT := -rq
 WIN64_TAREXT := zip
 WIN64_ASYS   := windows_amd64
-WIN64_STATIC := -static-libgcc -static-libstdc++
 
 MACOSX86_HOST   := x86_64-apple-darwin20.4
 MACOSX86_AHOST  := x86_64-apple-darwin
@@ -241,7 +237,6 @@ MACOSX86_TARCMD := tar
 MACOSX86_TAROPT := zcf
 MACOSX86_TAREXT := tar.gz
 MACOSX86_ASYS   := darwin_x86_64
-MACOSX86_STATIC := -static-libgcc -static-libstdc++
 
 MACOSARM_HOST   := aarch64-apple-darwin20.4
 MACOSARM_AHOST  := arm64-apple-darwin
@@ -252,7 +247,6 @@ MACOSARM_TARCMD := tar
 MACOSARM_TAROPT := zcf
 MACOSARM_TAREXT := tar.gz
 MACOSARM_ASYS   := darwin_arm64
-MACOSARM_STATIC := -lc -lc++
 
 # 1. --disable-lto , per immediately broken mpfr builds
 #    also disabled in pico toolchain, which uses the same osxcross dist
@@ -273,7 +267,6 @@ ARM64_TARCMD := tar
 ARM64_TAROPT := zcf
 ARM64_TAREXT := tar.gz
 ARM64_ASYS   := linux_aarch64
-ARM64_STATIC := -static-libgcc -static-libstdc++
 
 RPI_HOST   := arm-linux-gnueabihf
 RPI_AHOST  := arm-linux-gnueabihf
@@ -284,7 +277,6 @@ RPI_TARCMD := tar
 RPI_TAROPT := zcf
 RPI_TAREXT := tar.gz
 RPI_ASYS   := linux_armv6l\",\ \"linux_armv7l
-RPI_STATIC := -static-libgcc -static-libstdc++
 
 # Call with $@ to get the appropriate variable for this architecture
 host   = $($(call arch,$(1))_HOST)
@@ -570,10 +562,9 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 .stage.%.gmp: .stage.%.start
 	echo STAGE: $@
 	(cd $(call arena,$@); \
-        rm -rf gmp gmp-$(GMP_VER) mpfr mpfr-$(MPFR_VER)) > $(call log,$@) 2>&1
+        rm -rf gmp-$(GMP_VER) mpfr-$(MPFR_VER)) > $(call log,$@) 2>&1
 	(cd $(call arena,$@); \
-		mkdir gmp gmp-$(GMP_VER); \
-		mkdir mpfr mpfr-$(MPFR_VER)) >> $(call log,$@) 2>&1
+		mkdir gmp-$(GMP_VER) mpfr-$(MPFR_VER)) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/gmp-$(GMP_VER); $(call setenv,$@); \
 		$(REPODIR)/gmp-$(GMP_VER)/configure $(CONFIGURE_GMP) $(call configure,$@) --target=$(call host,$@) --prefix=$(call arena,$@)/cross \
 			&& $(MAKE) \
@@ -585,7 +576,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	touch $@
 
 # ./configure cannot comprehend cross-toolchain output
-.stage.MACOSARM.gmp .stage.MACOSX86.gmp: CONFIGURE_GMP := --disable-assembly
+.stage.MACOSARM.gmp .stage.MACOSX86.gmp: CONFIGURE_GMP=--disable-assembly
 
 # GDB static build has to have up-to-date libs
 .stage.%.libexpat: .stage.%.start
