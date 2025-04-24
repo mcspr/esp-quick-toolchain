@@ -651,6 +651,10 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 .stage.%.binutils-make: BINUTILS_MAKE_LDFLAGS=-static
 .stage.MACOSARM.binutils-make .stage.MACOSX86.binutils-make: BINUTILS_MAKE_LDFLAGS = 
 
+# statically link w/ build host stdlib .dlls
+.stage.WIN32.binutils-make: BINUTILS_MAKE_LDFLAGS=-static -static-libgcc -static-libstdc++
+.stage.WIN64.binutils-make: BINUTILS_MAKE_LDFLAGS=-static -static-libgcc -static-libstdc++
+
 .stage.%.gcc1-config: .stage.%.binutils-make
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(GCC_DIR) > $(call log,$@) 2>&1
