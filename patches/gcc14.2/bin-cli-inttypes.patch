@@ -1,0 +1,26 @@
+diff --git a/gdb/cli/cli-decode.c b/gdb/cli/cli-decode.c
+index 2c5292286cc..65d8de3c6e9 100644
+--- a/gdb/cli/cli-decode.c
++++ b/gdb/cli/cli-decode.c
+@@ -2903,16 +2903,16 @@ parse_cli_var_color (const char **args)
+   if (len != 7)
+     error_no_arg (_("invalid RGB hex triplet format"));
+ 
+-  uint8_t r, g, b;
++  uint32_t rgb;
+   int scanned_chars = 0;
+-  int parsed_args = sscanf (*args, "#%2" SCNx8 "%2" SCNx8 "%2" SCNx8 "%n",
+-			    &r, &g, &b, &scanned_chars);
++  int parsed_args = sscanf (*args, "#%6" SCNx32 "%n", &rgb, &scanned_chars);
+ 
+-  if (parsed_args != 3 || scanned_chars != 7)
++  if (parsed_args != 1 || scanned_chars != 7)
+     error_no_arg (_("invalid RGB hex triplet format"));
+ 
+   *args += len;
+-  return ui_file_style::color (r, g, b);
++  return ui_file_style::color (
++    (rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff);
+ }
+ 
+ /* See cli-decode.h.  */
