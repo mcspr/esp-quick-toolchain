@@ -263,8 +263,7 @@ class Worker:
         if exists:
             name = exists
         else:
-            index = len(ref.keys())
-            name = f"__eqt_excstr_{tag}_{self._tag}{index}"
+            name = f"__eqt_excstr_{tag}_{self._tag}{len(ref)}"
             ref[text] = name
 
         if not exists:
