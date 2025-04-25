@@ -746,7 +746,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(cd $(call arena,$@)/mkspiffs;\
 	    $(call setenv,$@); \
 	    $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
-			CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=$(STRIP) \
+			CC=$(CC) CXX=$(CXX) STRIP=$(STRIP) \
 			BUILD_CONFIG_NAME="-arduino-esp8266" \
 			CPPFLAGS="-DSPIFFS_USE_MAGIC_LENGTH=0 -DSPIFFS_ALIGNED_OBJECT_INDEX_TABLES=1" \
             mkspiffs$(call exe,$@)) >> $(call log,$@) 2>&1
@@ -763,8 +763,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf pkg.mkspiffs.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
 
-.stage.%.mkspiffs: STRIP=$(call host,$@)-strip
-.stage.MACOSARM.mkspiffs: STRIP=touch
+.stage.%.mkspiffs: CC=$(call host,$@)-gcc CXX=$(call host,$@)-g++ STRIP=$(call host,$@)-strip
+.stage.MACOSARM.mkspiffs: CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=touch
 
 .stage.%.mklittlefs: .stage.%.start
 	echo STAGE: $@
@@ -774,7 +774,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(cd $(call arena,$@)/mklittlefs;\
 	    $(call setenv,$@); \
 	    $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
-			CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=$(STRIP) \
+			CC=$(CC) CXX=$(CXX) STRIP=$(STRIP) \
 			BUILD_CONFIG_NAME="-arduino-esp8266" \
             mklittlefs$(call exe,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.mklittlefs.$(call arch,$@) >> $(call log,$@) 2>&1
@@ -790,8 +790,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf pkg.mklittlefs.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
 
-.stage.%.mklittlefs: STRIP=$(call host,$@)-strip
-.stage.MACOSARM.mklittlefs: STRIP=touch
+.stage.%.mklittlefs: CC=$(call host,$@)-gcc CXX=$(call host,$@)-g++ STRIP=$(call host,$@)-strip
+.stage.MACOSARM.mklittlefs: CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=touch
 
 .stage.%.esptool: .stage.%.start
 	echo STAGE: $@
@@ -801,7 +801,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(cd $(call arena,$@)/esptool;\
 	    $(call setenv,$@); \
 	    $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
-			CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=$(STRIP) \
+			CC=$(CC) CXX=$(CXX) STRIP=$(STRIP) \
 			BUILD_CONFIG_NAME="-arduino-esp8266" \
             esptool$(call exe,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.esptool.$(call arch,$@) >> $(call log,$@) 2>&1
@@ -814,8 +814,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf pkg.esptool.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
 
-.stage.%.esptool: STRIP=$(call host,$@)-strip
-.stage.MACOSARM.esptool: STRIP=touch
+.stage.%.esptool: CC=$(call host,$@)-gcc CXX=$(call host,$@)-g++ STRIP=$(call host,$@)-strip
+.stage.MACOSARM.esptool: CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=touch
 
 .stage.%.done: .stage.%.package .stage.%.mkspiffs .stage.%.esptool .stage.%.mklittlefs
 	echo STAGE: $@
