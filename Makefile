@@ -566,7 +566,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(cd $(call arena,$@); \
 		mkdir gmp-$(GMP_VER) mpfr-$(MPFR_VER)) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/gmp-$(GMP_VER); $(call setenv,$@); \
-		$(REPODIR)/gmp-$(GMP_VER)/configure $(CONFIGURE_GMP) $(call configure,$@) --target=$(call host,$@) --prefix=$(call arena,$@)/cross \
+		$(REPODIR)/gmp-$(GMP_VER)/configure $(GMP_CONFIGURE_FLAGS) $(call configure,$@) --target=$(call host,$@) --prefix=$(call arena,$@)/cross \
 			&& $(MAKE) \
 			&& $(MAKE) install) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/mpfr-$(MPFR_VER); $(call setenv,$@); \
@@ -576,7 +576,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	touch $@
 
 # ./configure cannot comprehend cross-toolchain output
-.stage.MACOSARM.gmp .stage.MACOSX86.gmp: CONFIGURE_GMP=--disable-assembly
+.stage.MACOSARM.gmp .stage.MACOSX86.gmp: GMP_CONFIGURE_FLAGS=--disable-assembly
 
 # GDB static build has to have up-to-date libs
 .stage.%.libexpat: .stage.%.start
