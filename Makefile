@@ -143,6 +143,8 @@ TARGET_ARCH := xtensa-lx106-elf
 # MKSPIFFS must stay at 0.2.0 until Arduino boards.txt.py fixes non-page-aligned sizes
 MKSPIFFS_BRANCH := 0.2.0
 
+MKLITTLEFFS_BRANCH := 0.4.1
+
 # libelf shared by the repo here
 LIBELF_VER = 0.8.13
 LIBELF_BLOB = $(PWD)/blobs/libelf-$(LIBELF_VER).tar.gz
@@ -473,13 +475,15 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 # Completely clean out a git directory, removing any untracked files
 .clean.%.git:
 	echo STAGE: $@
-	cd $(REPODIR)/$(call arch,$@) && git reset --hard HEAD && git clean -f -d
+	(cd $(REPODIR)/$(call arch,$@) \
+		&& git reset --hard \
+		&& git clean -f -d)
 
 .clean.%.deps:
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/cross
 
-.clean.gits: .clean.$(BINUTILS_DIR).git .clean.$(GCC_DIR).git .clean.newlib.git .clean.newlib.git .clean.lx106-hal.git .clean.mkspiffs.git .clean.esptool.git .clean.mklittlefs.git
+.clean.gits: .clean.$(BINUTILS_DIR).git .clean.$(GCC_DIR).git .clean.newlib.git .clean.lx106-hal.git .clean.mkspiffs.git .clean.mklittlefs.git .clean.esptool.git
 
 # Prep externally fetched urls & local archives
 .stage.blobs:
@@ -506,22 +510,14 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 # Prep the git repos with no patches and any required libraries for gcc & binutils-gdb
 .stage.prepgit: .stage.gits .clean.gits .stage.blobs
 	echo STAGE: $@
-	for i in binutils-gdb gcc newlib lx106-hal mkspiffs mklittlefs esptool; do \
-		cd $(REPODIR)/$$i \
-		&& git reset --hard HEAD \
-		&& git submodule init \
-		&& git submodule update \
-		&& git clean -f -d ; \
-	done > $(call log,$@) 2>&1
-	touch $@
 
 # Checkout any required branches
 .stage.checkout: .stage.prepgit
 	echo STAGE: $@
-	(cd $(REPODIR)/$(GCC_DIR) && git reset --hard && git checkout $(GCC_BRANCH)) > $(call log,$@) 2>&1
-	(cd $(REPODIR)/$(BINUTILS_DIR) && git reset --hard && git checkout $(BINUTILS_BRANCH)) > $(call log,$@) 2>&1
-	(cd $(REPODIR)/mkspiffs && git reset --hard && git submodule deinit --all && git clean -f -d && git checkout $(MKSPIFFS_BRANCH) && git submodule init && git submodule update) >> $(call log,$@) 2>&1
-	touch $@
+	(cd $(REPODIR)/$(GCC_DIR) && git checkout $(GCC_BRANCH)) > $(call log,$@) 2>&1
+	(cd $(REPODIR)/$(BINUTILS_DIR) && git checkout $(BINUTILS_BRANCH)) >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/mkspiffs && git checkout $(MKSPIFFS_BRANCH)) >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/mklittlefs && git checkout $(MKLITTLEFS_BRANCH) && git submodule deinit --all && git submodule init && git submodule update) >> $(call log,$@) 2>&1
 
 # Apply our patches
 .stage.patch: .stage.checkout
