@@ -347,6 +347,8 @@ configure_ncurses = \
 	--with-versioned-syms
 
 configure_expat = \
+	--without-docbook \
+	--without-xmlwf \
 	--without-examples \
 	--without-tests
 
