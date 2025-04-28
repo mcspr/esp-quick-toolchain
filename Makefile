@@ -655,7 +655,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 
 .stage.%.gcc1-make: .stage.%.gcc1-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(MAKE) all-gcc; $(MAKE) install-gcc) > $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(GCC_DIR) && $(call setenv,$@) && $(MAKE) all-gcc && $(MAKE) install-gcc)
 	touch $@
 
 .stage.%.newlib-config: .stage.%.gcc1-make
