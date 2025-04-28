@@ -1,21 +1,21 @@
-From 409724aa488f0226a73dcae295c50a08b31776d9 Mon Sep 17 00:00:00 2001
+From 7c92fa41990c895a96e8b64ff37dd472dba56cc0 Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
 Date: Mon, 28 Apr 2025 11:00:50 +0000
 Subject: [PATCH] Flag predefined and user-selected sections (aka flash string
  sections) with SHF_MERGE | SHF_STRINGS
 
 ---
- gcc/config/xtensa/xtensa.cc                   | 48 +++++++++++++++++++
+ gcc/config/xtensa/xtensa.cc                   | 49 +++++++++++++++++++
  gcc/config/xtensa/xtensa.opt                  |  4 ++
  gcc/testsuite/gcc.target/xtensa/flashstring.c | 12 +++++
- 3 files changed, 64 insertions(+)
+ 3 files changed, 65 insertions(+)
  create mode 100644 gcc/testsuite/gcc.target/xtensa/flashstring.c
 
 diff --git a/gcc/config/xtensa/xtensa.cc b/gcc/config/xtensa/xtensa.cc
-index 9beac932467..1c540dc7f1a 100644
+index 9beac932467..06c023705e5 100644
 --- a/gcc/config/xtensa/xtensa.cc
 +++ b/gcc/config/xtensa/xtensa.cc
-@@ -2837,6 +2837,44 @@ xtensa_return_in_msb (const_tree valtype)
+@@ -2837,6 +2838,44 @@ xtensa_return_in_msb (const_tree valtype)
  }
  
  
@@ -60,7 +60,7 @@ index 9beac932467..1c540dc7f1a 100644
  static void
  xtensa_option_override (void)
  {
-@@ -2891,6 +2929,9 @@ xtensa_option_override (void)
+@@ -2891,6 +2930,9 @@ xtensa_option_override (void)
  	}
      }
  
@@ -70,7 +70,7 @@ index 9beac932467..1c540dc7f1a 100644
    init_machine_status = xtensa_init_machine_status;
  
    /* Check PIC settings.  PIC is only supported when using L32R
-@@ -4350,6 +4391,13 @@ xtensa_multibss_section_type_flags (tree decl, const char *name, int reloc)
+@@ -4350,6 +4392,13 @@ xtensa_multibss_section_type_flags (tree decl, const char *name, int reloc)
  		 "%<.bss%> section");
      }
  

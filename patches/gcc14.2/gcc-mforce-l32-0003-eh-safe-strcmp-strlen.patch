@@ -1,7 +1,7 @@
-From d2d5e3f40fddb923118c12485e3e5be09d646181 Mon Sep 17 00:00:00 2001
+From fc6b62d499cfed3f9150cde5081315cb0eba1841 Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
 Date: Mon, 28 Apr 2025 10:52:26 +0000
-Subject: [PATCH 2/2] -mforce-l32 for libgcc unwind and libsupc++
+Subject: [PATCH 3/3] -mforce-l32 for libgcc unwind and libsupc++
 
 https://github.com/earlephilhower/esp-quick-toolchain/blob/master/patches/gcc10.3/
 
