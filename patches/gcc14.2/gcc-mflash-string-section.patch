@@ -1,0 +1,119 @@
+From 409724aa488f0226a73dcae295c50a08b31776d9 Mon Sep 17 00:00:00 2001
+From: Maxim Prokhorov <prokhorov.max@outlook.com>
+Date: Mon, 28 Apr 2025 11:00:50 +0000
+Subject: [PATCH] Flag predefined and user-selected sections (aka flash string
+ sections) with SHF_MERGE | SHF_STRINGS
+
+---
+ gcc/config/xtensa/xtensa.cc                   | 48 +++++++++++++++++++
+ gcc/config/xtensa/xtensa.opt                  |  4 ++
+ gcc/testsuite/gcc.target/xtensa/flashstring.c | 12 +++++
+ 3 files changed, 64 insertions(+)
+ create mode 100644 gcc/testsuite/gcc.target/xtensa/flashstring.c
+
+diff --git a/gcc/config/xtensa/xtensa.cc b/gcc/config/xtensa/xtensa.cc
+index 9beac932467..1c540dc7f1a 100644
+--- a/gcc/config/xtensa/xtensa.cc
++++ b/gcc/config/xtensa/xtensa.cc
+@@ -2837,6 +2837,44 @@ xtensa_return_in_msb (const_tree valtype)
+ }
+ 
+ 
++/* Forcibly flagged as SHF_MERGE | SHF_STRINGS */
++static vec<const char*> xtensa_flash_string_prefixes{};
++
++static const char* default_xtensa_flash_string_prefixes[] = {
++  ".irom.exceptionstring",
++  ".irom0.pstr",
++};
++
++static void
++xtensa_init_flash_string_prefixes ()
++{
++  if (xtensa_flash_string_prefixes.length())
++    return;
++
++  for (const auto *prefix : default_xtensa_flash_string_prefixes)
++  xtensa_flash_string_prefixes.safe_push (prefix);
++
++  unsigned int i;
++  cl_deferred_option *opt;
++  vec<cl_deferred_option> *v
++    = (vec<cl_deferred_option> *) xtensa_deferred_flash_string_sections;
++
++  if (v)
++    FOR_EACH_VEC_ELT (*v, i, opt)
++  {
++    switch (opt->opt_index)
++    {
++      case OPT_mflash_string_section_:
++	xtensa_flash_string_prefixes.safe_push ( xstrdup (opt->arg));
++	break;
++
++      default:
++	gcc_unreachable ();
++    }
++  }
++}
++
++
+ static void
+ xtensa_option_override (void)
+ {
+@@ -2891,6 +2929,9 @@ xtensa_option_override (void)
+ 	}
+     }
+ 
++  /* Initialize default & user provided flash string section prefixes */
++  xtensa_init_flash_string_prefixes ();
++
+   init_machine_status = xtensa_init_machine_status;
+ 
+   /* Check PIC settings.  PIC is only supported when using L32R
+@@ -4350,6 +4391,13 @@ xtensa_multibss_section_type_flags (tree decl, const char *name, int reloc)
+ 		 "%<.bss%> section");
+     }
+ 
++  for (const char *prefix : xtensa_flash_string_prefixes)
++  if (startswith (name, prefix))
++  {
++    flags &= ~(SECTION_NOTYPE);
++    flags |= SECTION_MERGE | SECTION_STRINGS | (SECTION_ENTSIZE & 1);
++  }
++
+   return flags;
+ }
+ 
+diff --git a/gcc/config/xtensa/xtensa.opt b/gcc/config/xtensa/xtensa.opt
+index b653e99d189..327ce87024c 100644
+--- a/gcc/config/xtensa/xtensa.opt
++++ b/gcc/config/xtensa/xtensa.opt
+@@ -71,3 +71,7 @@ Use windowed registers ABI.
+ mstrict-align
+ Target Var(xtensa_strict_alignment) Init(XTENSA_STRICT_ALIGNMENT_UNDEFINED)
+ Do not use unaligned memory references.
++
++mflash-string-section=
++Target RejectNegative Joined Defer Var(xtensa_deferred_flash_string_sections)
++-mflash-string-section=<section> One or more section names, forcibly flagged as SHF_MERGE | SHF_STRINGS. Includes .irom.exceptionstring and .irom0.pstr by default.
+diff --git a/gcc/testsuite/gcc.target/xtensa/flashstring.c b/gcc/testsuite/gcc.target/xtensa/flashstring.c
+new file mode 100644
+index 00000000000..0535ac8877f
+--- /dev/null
++++ b/gcc/testsuite/gcc.target/xtensa/flashstring.c
+@@ -0,0 +1,12 @@
++/* { dg-do compile */
++/* { dg-options "-fdata-sections -mflash-string-section=.test.section" } */
++
++const char a[] __attribute__((__section__(".test.section.123"))) = "aaaa123bbbb";
++
++const char b[] __attribute__((__section__(".test"))) = "bbbbccccdddd";
++
++char c[] = "cccc";
++
++/* { dg-final { scan-assembler ".section        .test.section.123,\"aMS\",@progbits" } } */
++/* { dg-final { scan-assembler ".section        .test,\"a\"" } } */
++/* { dg-final { scan-assembler ".section        .data.c,\"aw\"" } } */
+-- 
+2.49.0
+
