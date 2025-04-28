@@ -765,9 +765,6 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf pkg.mkspiffs.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
 
-.stage.%.mkspiffs: CC=$(call host,$@)-gcc CXX=$(call host,$@)-g++ STRIP=$(call host,$@)-strip
-.stage.MACOSARM.mkspiffs: CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=touch
-
 .stage.%.mklittlefs: .stage.%.start
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/mklittlefs > $(call log,$@) 2>&1
@@ -792,9 +789,6 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf pkg.mklittlefs.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
 
-.stage.%.mklittlefs: CC=$(call host,$@)-gcc CXX=$(call host,$@)-g++ STRIP=$(call host,$@)-strip
-.stage.MACOSARM.mklittlefs: CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=touch
-
 .stage.%.esptool: .stage.%.start
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/esptool > $(call log,$@) 2>&1
@@ -816,8 +810,17 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf pkg.esptool.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
 
-.stage.%.esptool: CC=$(call host,$@)-gcc CXX=$(call host,$@)-g++ STRIP=$(call host,$@)-strip
-.stage.MACOSARM.esptool: CC=$(call host,$@)-cc CXX=$(call host,$@)-c++ STRIP=touch
+# local tools configure cannot figure out the arch triplet correctly
+# also note that locally configured toolchain lacks -cc & -c++ links to gcc
+.stage.%.mkspiffs .stage.%.mklittlefs .stage.%.esptool: CC=$(call host,$@)-gcc
+.stage.%.mkspiffs .stage.%.mklittlefs .stage.%.esptool: CXX=$(call host,$@)-g++
+.stage.%.mkspiffs .stage.%.mklittlefs .stage.%.esptool: STRIP=$(call host,$@)-strip
+
+# arm builds using clang, not gcc.
+# same as .stage.%.strip - simply stamp the target, never change it
+.stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: CC=$(call host,$@)-cc
+.stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: CXX=$(call host,$@)-c++
+.stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: STRIP=touch
 
 .stage.%.done: .stage.%.package .stage.%.mkspiffs .stage.%.esptool .stage.%.mklittlefs
 	echo STAGE: $@
