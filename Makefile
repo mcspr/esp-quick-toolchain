@@ -141,6 +141,9 @@ endif
 
 TARGET_ARCH := xtensa-lx106-elf
 
+NEWLIB_BRANCH := xtensa-4_0_0-lock-arduino
+LX106_HAL_BRANCH := e4bcc63c9c016e4f8848e7e8f512438ca857531d
+
 # MKSPIFFS must stay at 0.2.0 until Arduino boards.txt.py fixes non-page-aligned sizes
 MKSPIFFS_BRANCH := 0.2.0
 
@@ -430,21 +433,27 @@ makejson = tarballsize=$$(stat -c%s $${tarball}); \
 	     echo ' "size": "'$${tarballsize}'"' && \
 	     echo '}') > $${tarball}.json
 
-# The recpies begin here.
+# The recipes begin here.
 
 linux default: .stage.LINUX.done
 
-.PRECIOUS: .stage.% .stage.%.% .stage.%.deps .stage.%.gdb-deps
+.PRECIOUS: .stage.% .stage.%.%
 
-.PHONY: .stage.gits .stage.blobs
+.PHONY: .clean.% .clean.%.%
+
+.PHONY: .stage.patch .stage.gitclone .stage.blobs .stage.checkout
+
+.PHONY: .stage.%.start
 
 # Build all toolchain versions
 all: .stage.LINUX.done .stage.LINUX32.done .stage.WIN32.done .stage.WIN64.done .stage.MACOSX86.done .stage.MACOSARM.done .stage.ARM64.done .stage.RPI.done
 	echo STAGE: $@
 	echo All complete
 
+$(REPODIR):
+	mkdir -p $@
 
-download: .stage.gits .stage.blobs
+download: .stage.gitclone .stage.blobs
 
 # Other cross-compile cannot start until Linux is built
 .stage.LINUX32.gcc1-make .stage.WIN32.gcc1-make .stage.WIN64.gcc1-make .stage.MACOSX86.gcc1-make .stage.MACOSARM.gcc1-make .stage.ARM64.gcc1-make .stage.RPI.gcc1-make: .stage.LINUX.done
@@ -462,20 +471,18 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf $(call arena,$@) > /dev/null 2>&1
 
 # Download the needed GIT and tarballs
-.stage.gitclone:
+.stage.gitclone: .clean.gitclone | $(REPODIR)
 	echo STAGE: $@
-	mkdir -p $(REPODIR) > $(call log,$@) 2>&1
-	(test -d $(REPODIR)/$(BINUTILS_DIR) || git clone $(BINUTILS_REPO)                               $(REPODIR)/$(BINUTILS_DIR) ) >> $(call log,$@) 2>&1
+	(test -d $(REPODIR)/$(BINUTILS_DIR) || git clone $(BINUTILS_REPO)                               $(REPODIR)/$(BINUTILS_DIR) ) > $(call log,$@) 2>&1
 	(test -d $(REPODIR)/$(GCC_DIR)      || git clone $(GCC_REPO)                                    $(REPODIR)/$(GCC_DIR) ) >> $(call log,$@) 2>&1
 	(test -d $(REPODIR)/newlib          || git clone https://github.com/$(GHUSER)/newlib-xtensa.git $(REPODIR)/newlib      ) >> $(call log,$@) 2>&1
 	(test -d $(REPODIR)/lx106-hal       || git clone https://github.com/$(GHUSER)/lx106-hal.git     $(REPODIR)/lx106-hal   ) >> $(call log,$@) 2>&1
 	(test -d $(REPODIR)/mkspiffs        || git clone https://github.com/$(GHUSER)/mkspiffs.git      $(REPODIR)/mkspiffs    ) >> $(call log,$@) 2>&1
 	(test -d $(REPODIR)/mklittlefs      || git clone https://github.com/$(GHUSER)/mklittlefs.git    $(REPODIR)/mklittlefs  ) >> $(call log,$@) 2>&1
 	(test -d $(REPODIR)/esptool         || git clone https://github.com/$(GHUSER)/esptool-ck.git    $(REPODIR)/esptool     ) >> $(call log,$@) 2>&1
-	touch $@
 
 # Completely clean out a git directory, removing any untracked files
-.clean.%.git:
+.clean.%.git: | $(REPODIR) $(REPODIR)/$(call arch,$@)
 	echo STAGE: $@
 	(cd $(REPODIR)/$(call arch,$@) \
 		&& git reset --hard \
@@ -485,10 +492,20 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/cross
 
-.clean.gits: .clean.$(BINUTILS_DIR).git .clean.$(GCC_DIR).git .clean.newlib.git .clean.lx106-hal.git .clean.mkspiffs.git .clean.mklittlefs.git .clean.esptool.git
+.clean.gitclone: .clean.$(BINUTILS_DIR).git .clean.$(GCC_DIR).git .clean.newlib.git .clean.lx106-hal.git .clean.mkspiffs.git .clean.mklittlefs.git .clean.esptool.git
+
+# Checkout any required branches
+.stage.checkout: .stage.gitclone | $(REPODIR)
+	echo STAGE: $@
+	(cd $(REPODIR)/$(BINUTILS_DIR) && git checkout $(BINUTILS_BRANCH)) > $(call log,$@) 2>&1
+	(cd $(REPODIR)/$(GCC_DIR) && git checkout $(GCC_BRANCH)) >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/newlib && git checkout $(NEWLIB_BRANCH)) >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/lx106-hal && git checkout $(LX106_HAL_BRANCH)) >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/mkspiffs && git checkout $(MKSPIFFS_BRANCH)) >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/mklittlefs && git checkout $(MKLITTLEFS_BRANCH) && git submodule deinit --all && git submodule init && git submodule update) >> $(call log,$@) 2>&1
 
 # Prep externally fetched urls & local archives
-.stage.blobs:
+.stage.blobs: .stage.checkout | $(REPODIR)
 	echo STAGE: $@
 	for url in $(URLS) ; do \
 	    archive=$${url##*/}; name=$${archive%.t*}; base=$${name%-*}; ext=$${archive##*.} ; \
@@ -507,22 +524,9 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 		tar xfz $(LIBELF_BLOB); \
 		rm -rf libelf; \
 		ln -s libelf-$(LIBELF_VER) libelf) >> $(call log,$@) 2>&1
-	touch $@
-
-# Prep the git repos with no patches and any required libraries for gcc & binutils-gdb
-.stage.prepgit: .stage.gits .clean.gits .stage.blobs
-	echo STAGE: $@
-
-# Checkout any required branches
-.stage.checkout: .stage.prepgit
-	echo STAGE: $@
-	(cd $(REPODIR)/$(GCC_DIR) && git checkout $(GCC_BRANCH)) > $(call log,$@) 2>&1
-	(cd $(REPODIR)/$(BINUTILS_DIR) && git checkout $(BINUTILS_BRANCH)) >> $(call log,$@) 2>&1
-	(cd $(REPODIR)/mkspiffs && git checkout $(MKSPIFFS_BRANCH)) >> $(call log,$@) 2>&1
-	(cd $(REPODIR)/mklittlefs && git checkout $(MKLITTLEFS_BRANCH) && git submodule deinit --all && git submodule init && git submodule update) >> $(call log,$@) 2>&1
 
 # Apply our patches
-.stage.patch: .stage.checkout
+.stage.patch: .stage.blobs .stage.checkout
 	echo STAGE: $@
 	for p in $(PATCHDIR)/gcc-*.patch $(PATCHDIR)/gcc$(GCC)/gcc-*.patch; do \
 	    test -r "$$p" || continue ; \
@@ -554,9 +558,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 		&& patch -s -p1 src/Makefile.am $(PATCHDIR)/hal-mawk.patch \
 		&& autoreconf -i) >> $(call log,$@) 2>&1
 	(set -x; ./libstd_flash_string_decls.py --root $(REPODIR)/$(GCC_DIR)/libstdc++-v3/include) >> $(call log,$@) 2>&1
-	touch $@
 
-.stage.%.start: .stage.patch .clean.%.deps
+.stage.%.start: .clean.%.deps .stage.patch
 	echo STAGE: $@
 	mkdir -p $(call arena,$@) > $(call log,$@) 2>&1
 
@@ -609,18 +612,10 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 		ln -s libtinfo.a libtermcap.a) >> $(call log,$@) 2>&1
 	touch $@
 
-.stage.%.gdb-deps: .stage.%.ncurses .stage.%.libexpat
-	echo STAGE: $@
-	touch $@
-
-.stage.%.deps: .stage.%.gmp .stage.%.gdb-deps
-	echo STAGE: $@
-	touch $@
-
-.NOTPARALLEL: .stage.%.ncurses .stage.%.libexpat .stage.%.gmp
+.NOTPARALLEL: .stage.%.gmp .stage.%.ncurses .stage.%.libexpat
 
 # Build binutils & gdb
-.stage.%.binutils-config: .stage.%.deps
+.stage.%.binutils-config: .stage.%.gmp .stage.%.ncurses .stage.%.libexpat
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(BINUTILS_DIR) > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/$(BINUTILS_DIR) >> $(call log,$@) 2>&1
@@ -659,7 +654,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 
 .stage.%.gcc1-make: .stage.%.gcc1-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/$(GCC_DIR) && $(call setenv,$@) && $(MAKE) all-gcc && $(MAKE) install-gcc)
+	(cd $(call arena,$@)/$(GCC_DIR) && $(call setenv,$@) && $(MAKE) all-gcc && $(MAKE) install-gcc) > $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.newlib-config: .stage.%.gcc1-make
