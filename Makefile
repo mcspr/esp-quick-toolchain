@@ -15,6 +15,7 @@ PWD      := $(shell pwd)
 REPODIR  := $(PWD)/repo
 PATCHDIR := $(PWD)/patches
 STAMP    := $(shell date +%y%m%d)
+REV      := $(shell git rev-parse --short HEAD)
 
 # For uploading, the GH user and PAT
 GHUSER := $(if $(GHUSER),$(GHUSER),$(shell cat .ghuser))
@@ -143,7 +144,7 @@ TARGET_ARCH := xtensa-lx106-elf
 # MKSPIFFS must stay at 0.2.0 until Arduino boards.txt.py fixes non-page-aligned sizes
 MKSPIFFS_BRANCH := 0.2.0
 
-MKLITTLEFFS_BRANCH := 0.4.1
+MKLITTLEFS_BRANCH := 4.0.2
 
 # libelf shared by the repo here
 LIBELF_VER = 0.8.13
@@ -291,8 +292,9 @@ taropt = $($(call arch,$(1))_TAROPT)
 tarext = $($(call arch,$(1))_TAREXT)
 log    = log$(1)
 
-# For package.json
-asys   = $($(call arch,$(1))_ASYS)
+# For package.json and arduino build
+asys    = $($(call arch,$(1))_ASYS)
+tarball = $(call host,$(1)).xtensa-lx106-elf-$(REV).$(STAMP).$(call tarext,$(1))
 
 # sometimes called for ./configure
 configure_vars = $($(call arch,$(1))_CONFIGURE_VARS)
@@ -548,11 +550,10 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
               echo '#define XCHAL_HAVE_FP_SQRT  0' ; \
               echo '#define XCHAL_HAVE_FP_RSQRT 0' ) > $${ow} ; \
         done >> $(call log,$@) 2>&1
-	(cd $(REPODIR)/lx106-hal \
-		&& patch -s -p1 < $(PATCHDIR)/hal-mawk.patch) >> $(call log,$@) 2>&1
-	(cd $(REPODIR)/lx106-hal && autoreconf -i) >> $(call log,$@) 2> &1
-	(cd $(REPODIR) \
-		&& ./libstd_flash_string_decls.py --root $(REPODIR)/$(GCC_DIR)/libstdc++-v3/include) >> $(call log,$@) 2>&1
+	(set -x; cd $(REPODIR)/lx106-hal \
+		&& patch -s -p1 src/Makefile.am $(PATCHDIR)/hal-mawk.patch \
+		&& autoreconf -i) >> $(call log,$@) 2>&1
+	(set -x; ./libstd_flash_string_decls.py --root $(REPODIR)/$(GCC_DIR)/libstdc++-v3/include) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.start: .stage.patch .clean.%.deps
@@ -734,7 +735,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	mkdir -p pkg.$(call arch,$@) >> $(call log,$@) 2>&1
 	cp -a $(call install,$@) pkg.$(call arch,$@)/xtensa-lx106-elf >> $(call log,$@) 2>&1
 	(cd pkg.$(call arch,$@)/xtensa-lx106-elf; $(call setenv,$@); pkgdesc="xtensa-gcc"; pkgname="toolchain-xtensa"; $(call makepackagejson,$@)) >> $(call log,$@) 2>&1
-	(tarball=$(call host,$@).xtensa-lx106-elf-$$(git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
+	(tarball=$(call tarball,$@) ; \
 	    cd pkg.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} xtensa-lx106-elf/ ; cd ..; $(call makejson,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
@@ -826,38 +827,56 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo Done building $(call arch,$@)
 	touch $@
 
-# Only the native version has to be done to install libs to GIT
-install: .stage.LINUX.install
-.stage.LINUX.install:
-	echo STAGE: $@
-	rm -rf $(ARDUINO)
-	git clone https://github.com/$(GHUSER)/Arduino $(ARDUINO)
-	(cd $(ARDUINO) && git checkout $(INSTALLBRANCH) && git submodule init && git submodule update)
-	echo "-------- Building installable hal"
-	rm -rf arena/hal-install; mkdir -p arena/hal-install
-	cd arena/hal-install; $(call setenv,$@); $(REPODIR)/lx106-hal/configure --prefix=$(ARDUINO)/tools/sdk/libc --libdir=$(ARDUINO)/tools/sdk/lib --host=xtensa-lx106-elf $$(echo $(call configure,$@) | sed 's/--host=.*\s//' | sed 's/--prefix=.*\s//' | sed 's/--disable-libstdcxx-verbose//' )
-	cd arena/hal-install; $(call setenv,$@); $(MAKE) ; $(MAKE) install
-	echo "-------- Copying GCC libs"
-	#cp $(call install,$@)/lib/gcc/xtensa-lx106-elf/*/libgcc.a  $(ARDUINO)/tools/sdk/lib/.
-	cp $(call install,$@)/xtensa-lx106-elf/lib/libstdc++-exc.a $(ARDUINO)/tools/sdk/lib/.
-	cp $(call install,$@)/xtensa-lx106-elf/lib/libstdc++.a     $(ARDUINO)/tools/sdk/lib/.
+.stage.LINUX.arduino-checkout:
+	echo "-------- Preparing Arduino repo at $(ARDUINO)"
+	test -d $(ARDUINO) || git clone https://github.com/$(GHUSER)/Arduino $(ARDUINO)
+	(cd $(ARDUINO) \
+		&& git clean -f -d \
+		&& git fetch origin $(INSTALLBRANCH) \
+		&& git checkout $(INSTALLBRANCH) \
+		&& git submodule init \
+		&& git submodule update)
+
+.stage.LINUX.arduino-toolchain:
+	echo "-------- Copying GCC and LIBSTDC++ libs"
+#	cp $(call install,$@)/lib/gcc/xtensa-lx106-elf/*/libgcc.a  $(ARDUINO)/tools/sdk/lib/.
+	cp -vu $(call install,$@)/xtensa-lx106-elf/lib/libstdc++-exc.a $(ARDUINO)/tools/sdk/lib/.
+	cp -vu $(call install,$@)/xtensa-lx106-elf/lib/libstdc++.a     $(ARDUINO)/tools/sdk/lib/.
 	echo "-------- Copying toolchain directory"
 	rm -rf $(ARDUINO)/tools/sdk/xtensa-lx106-elf
-	cp -a $(call install,$@)/xtensa-lx106-elf $(ARDUINO)/tools/sdk/xtensa-lx106-elf
+	cp -va $(call install,$@)/xtensa-lx106-elf $(ARDUINO)/tools/sdk/xtensa-lx106-elf
+
+.stage.LINUX.arduino-hal:
+	echo "-------- Copying HAL lib"
+	cp -vu $(call install,$@)/lib/libhal.a $(ARDUINO)/tools/sdk/lib/.
+
+.stage.LINUX.arduino-package-json:
 	echo "-------- Updating package.json"
-	ver=$(REL)-$(SUBREL)-$(shell git rev-parse --short HEAD); pkgfile=$(ARDUINO)/package/package_esp8266com_index.template.json; \
+	ver=$(REL)-$(SUBREL)-$(REV); pkgfile=$(ARDUINO)/package/package_esp8266com_index.template.json; \
 	./patch_json.py --pkgfile "$${pkgfile}" --tool xtensa-lx106-elf-gcc --ver "$${ver}" --glob '*xtensa-lx106-elf*.json' ; \
 	./patch_json.py --pkgfile "$${pkgfile}" --tool esptool --ver "$${ver}" --glob '*esptool*json' ; \
 	./patch_json.py --pkgfile "$${pkgfile}" --tool mkspiffs --ver "$${ver}" --glob '*mkspiffs*json'; \
 	./patch_json.py --pkgfile "$${pkgfile}" --tool mklittlefs --ver "$${ver}" --glob '*mklittlefs*json'
+
+.stage.LINUX.arduino-build:
 	echo "-------- Installing toolchain"
-	(cd $(ARDUINO)/tools && tar xf ../../x86_64-linux-gnu.xtensa-lx106-elf-*.tar.gz )
+	(cd $(ARDUINO)/tools && tar xf $(REPODIR)/$(call tarball,$@))
 	echo "-------- Building and installing BearSSL"
 	(cd $(ARDUINO)/tools/sdk/ssl && make clean && make all && make install)
 	echo "-------- Building and installing LWIP2"
 	(cd $(ARDUINO)/tools/sdk/lwip2 && make clean && make install)
 	echo "-------- Building eboot.elf"
 	(cd $(ARDUINO)/bootloaders/eboot && make clean && make)
+
+# Only the native version has to be done to install libs to GIT
+install: .stage.LINUX.install
+.stage.LINUX.install:
+	echo STAGE: $@
+	$(MAKE) .stage.LINUX.arduino-checkout
+	$(MAKE) .stage.LINUX.arduino-toolchain
+	$(MAKE) .stage.LINUX.arduino-hal
+	$(MAKE) .stage.LINUX.arduino-package-json
+	$(MAKE) .stage.LINUX.arduino-build
 	echo "Install done"
 
 # Upload a draft toolchain release
