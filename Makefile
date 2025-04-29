@@ -548,8 +548,11 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
               echo '#define XCHAL_HAVE_FP_SQRT  0' ; \
               echo '#define XCHAL_HAVE_FP_RSQRT 0' ) > $${ow} ; \
         done >> $(call log,$@) 2>&1
-	cd $(REPODIR)/lx106-hal && autoreconf -i >> $(call log,$@) 2>&1
-	./libstd_flash_string_decls.py --root $(REPODIR)/$(GCC_DIR)/libstdc++-v3/include >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/lx106-hal \
+		&& patch -s -p1 < $(PATCHDIR)/hal-mawk.patch) >> $(call log,$@) 2>&1
+	(cd $(REPODIR)/lx106-hal && autoreconf -i) >> $(call log,$@) 2> &1
+	(cd $(REPODIR) \
+		&& ./libstd_flash_string_decls.py --root $(REPODIR)/$(GCC_DIR)/libstdc++-v3/include) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.start: .stage.patch .clean.%.deps
