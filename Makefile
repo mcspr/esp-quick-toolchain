@@ -244,6 +244,15 @@ MACOSX86_TAROPT := zcf
 MACOSX86_TAREXT := tar.gz
 MACOSX86_ASYS   := darwin_x86_64
 
+# 1. --disable-lto , per immediately broken mpfr & lto-plugin builds
+#    also disabled in pico toolchain, which uses the same osxcross dist
+# 2. macOS cross tools have to be explicitly stated when configuring build env
+#    host & target arch autodetection does not work for some reason and uses local gcc instead
+MACOSX86_CONFIGURE_VARS := \
+	--disable-lto \
+	CC=$(MACOSX86_HOST)-cc \
+	CXX=$(MACOSX86_HOST)-c++
+
 MACOSARM_HOST   := aarch64-apple-darwin20.4
 MACOSARM_AHOST  := arm64-apple-darwin
 MACOSARM_EXT    := .macosarm
@@ -254,10 +263,8 @@ MACOSARM_TAROPT := zcf
 MACOSARM_TAREXT := tar.gz
 MACOSARM_ASYS   := darwin_arm64
 
-# 1. --disable-lto , per immediately broken mpfr builds
-#    also disabled in pico toolchain, which uses the same osxcross dist
-# 2. macOS cross tools have to be explicitly stated when configuring build env
-#    host & target arch autodetection does not work for some reason and uses local gcc instead
+# 3. strip cannot happen
+# > aarch64-apple-darwin20.4-strip: warning: changes being made to the file will invalidate the code signature in ...
 MACOSARM_CONFIGURE_VARS := \
 	--disable-lto \
 	CC=$(MACOSARM_HOST)-cc \
@@ -712,7 +719,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 		$(call install,$@)/libexec/gcc/xtensa-lx106-elf/*/lto1$(call exe,$@) || true ) > $(call log,$@) 2>&1
 	touch $@
 
-# > aarch64-apple-darwin20.4-strip: warning: changes being made to the file will invalidate the code signature in ...
+# see MACOSARM_CONFIGURE_VARS
 .stage.MACOSARM.strip: .stage.MACOSARM.hal-make
 	echo STAGE: $@
 	touch $@
