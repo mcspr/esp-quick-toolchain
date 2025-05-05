@@ -708,6 +708,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(cd $(call arena,$@)/hal; \
 		$(call setenv,$@); \
 		$(MAKE) && $(MAKE) install) > $(call log,$@) 2>&1
+	(cd $(call install,$@)/$(TARGET_ARCH)/lib; \
+		cp -a $(call install,$@)/lib/libhal.a ./) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.strip: .stage.%.hal-make
