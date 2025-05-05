@@ -19,7 +19,7 @@ index dd9bfdebb..bd008030b 100644
 +    #define PSTRN_ATTR
 +        __attribute__((section( ".irom0.pstr." __FILE__ "." __STRINGIZE(__LINE__) "."  __STRINGIZE(__COUNTER__))))
 +    #define PSTRN(s,n) (__extension__({\
-+        static constexpr char __pstr__[] __attribute__((__aligned__(n))) PSTRN_ATTR = (s);\
++        static const char __pstr__[] __attribute__((__aligned__(n))) PSTRN_ATTR = (s);\
 +        &__pstr__[0];\
 +    }))
  #endif
