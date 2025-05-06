@@ -141,7 +141,7 @@ endif
 
 TARGET_ARCH := xtensa-lx106-elf
 
-NEWLIB_BRANCH := xtensa-4_0_0-lock-arduino
+NEWLIB_BRANCH := gcc14/string-h
 LX106_HAL_BRANCH := e4bcc63c9c016e4f8848e7e8f512438ca857531d
 
 # MKSPIFFS must stay at 0.2.0 until Arduino boards.txt.py fixes non-page-aligned sizes

@@ -1,5 +1,14 @@
+From 788c0f8984c3789d1aa2a09b2dbd9053b72f8a6d Mon Sep 17 00:00:00 2001
+From: Maxim Prokhorov <prokhorov.max@outlook.com>
+Date: Tue, 6 May 2025 14:00:32 +0000
+Subject: [PATCH] xtensa - PSTR_ATTR & removed section attribute assembler
+
+---
+ newlib/libc/sys/xtensa/sys/pgmspace.h | 12 ++++++++++--
+ 1 file changed, 10 insertions(+), 2 deletions(-)
+
 diff --git a/newlib/libc/sys/xtensa/sys/pgmspace.h b/newlib/libc/sys/xtensa/sys/pgmspace.h
-index dd9bfdebb..bd008030b 100644
+index dd9bfdebb..559e83669 100644
 --- a/newlib/libc/sys/xtensa/sys/pgmspace.h
 +++ b/newlib/libc/sys/xtensa/sys/pgmspace.h
 @@ -22,7 +22,7 @@ extern "C" {
@@ -7,22 +16,34 @@ index dd9bfdebb..bd008030b 100644
    // Ref: https://gcc.gnu.org/onlinedocs/gcc-3.2/gcc/Variable-Attributes.html
    // Place each progmem object into its own named section, avoiding conflicts
 -  #define PROGMEM __attribute__((section( "\".irom.text." __FILE__ "." __STRINGIZE(__LINE__) "."  __STRINGIZE(__COUNTER__) "\"")))
-+  #define PROGMEM __attribute__((section( ".irom.text." __FILE__ "." __STRINGIZE(__LINE__) "."  __STRINGIZE(__COUNTER__))))
++  #define PROGMEM __attribute__((section(".irom.text." __FILE__ "." __STRINGIZE(__LINE__) "." __STRINGIZE(__COUNTER__))))
  #endif
  #ifndef PGM_P
    #define PGM_P              const char *
-@@ -41,7 +41,12 @@ extern "C" {
+@@ -31,6 +31,11 @@ extern "C" {
+   #define PGM_VOID_P         const void *
+ #endif
+ 
++#ifndef PSTR_ATTR
++  // Special case of PROGMEM, where data is '\0'-terminated string. Using reserved section name prefix for distinguish the two
++  #define PSTR_ATTR __attribute__((section(".irom0.pstr." __FILE__ "." __STRINGIZE(__LINE__) "." __STRINGIZE(__COUNTER__))))
++#endif
++
+ #ifndef PSTR_ALIGN
+   // PSTR() macro starts by default on a 32-bit boundary.  This adds on average
+   // 1.5 bytes/string, but in return memcpy_P and strcpy_P will work 4~8x faster
+@@ -41,7 +46,10 @@ extern "C" {
      // Multi-alignment variant of PSTR, n controls the alignment and should typically be 1 or 4
      // Adapted from AVR-specific code at https://forum.arduino.cc/index.php?topic=194603.0
      // Uses C attribute section instead of ASM block to allow for C language string concatenation ("x" "y" === "xy")
 -    #define PSTRN(s,n) (__extension__({static const char __pstr__[] __attribute__((__aligned__(n))) __attribute__((section( "\".irom0.pstr." __FILE__ "." __STRINGIZE(__LINE__) "."  __STRINGIZE(__COUNTER__) "\", \"aSM\", @progbits, 1 #"))) = (s); &__pstr__[0];}))
-+    #define PSTRN_ATTR
-+        __attribute__((section( ".irom0.pstr." __FILE__ "." __STRINGIZE(__LINE__) "."  __STRINGIZE(__COUNTER__))))
 +    #define PSTRN(s,n) (__extension__({\
-+        static const char __pstr__[] __attribute__((__aligned__(n))) PSTRN_ATTR = (s);\
++        static const char __pstr__[] __attribute__((__aligned__(n))) PSTR_ATTR = (s);\
 +        &__pstr__[0];\
 +    }))
  #endif
  #ifndef PSTR
    // PSTR() uses the default alignment defined by PSTR_ALIGN
+-- 
+2.49.0
 
