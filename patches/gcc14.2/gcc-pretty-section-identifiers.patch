@@ -1,0 +1,146 @@
+From b2f8936ef624662e63a465b474cb1c40055c0868 Mon Sep 17 00:00:00 2001
+From: Maxim Prokhorov <prokhorov.max@outlook.com>
+Date: Thu, 8 May 2025 20:22:23 +0000
+Subject: [PATCH] experiment with section identifiers for internal string
+ constants
+
+esp-quick-toolchain originally reverted ddd0d18c9c07025d578f445dc9a3544020861197
+retaining the original decl_initial(<expr>) = <init>
+
+instead, manipulate varasm down the line. currently works for
+- __builtin__FILE (aka __FILE__, outside of preprocessor context)
+- __builtin__FUNCTION (aka __FUNCTION__, but a pointer)
+- __func__
+- __FUNCTION__
+- __PRETTY_FUNCTION__
+by chaining the array type node w/ the identifier string
+(since originating node that holds the original id node gets lost at that point)
+
+meaning, instead of
+ .rodata.foobar.str1.2
+
+what gets generated is
+ .rodata.foobar__PRETTY_FUNCTION__str1.2
+
+specifically 'array type' chains arent expected or used by the existing code
+which also means that chain is not detected by the internal tree hashing & reuse
+---
+ gcc/builtins.cc | 28 ++++++++++++++++++++++++++--
+ gcc/cp/decl.cc  |  7 +++++++
+ gcc/varasm.cc   | 21 +++++++++++++++++++--
+ 3 files changed, 52 insertions(+), 4 deletions(-)
+
+diff --git a/gcc/builtins.cc b/gcc/builtins.cc
+index 7c1497561f7..2d08114ea55 100644
+--- a/gcc/builtins.cc
++++ b/gcc/builtins.cc
+@@ -10389,6 +10389,23 @@ fold_builtin_addc_subc (location_t loc, enum built_in_function fcode,
+   return build2_loc (loc, COMPOUND_EXPR, type, store, intres);
+ }
+ 
++/* smuggle identifier w/ the type of the string cst, allowing varasm section selector to use it
++   specifically 'array type' chains arent expected or used by the existing code
++   which also means that chain gets undetected by the internal tree hashing & reuse
++   one side-effect is these become unique 'const char[N]' e.g. is_same would break */
++static void
++builtin_string_literal_type_chain (tree literal, const char *identifier)
++{
++  /* ref. tree.cc - build_string_literal
++     > build1 (ADDR_EXPR, type, build4 (ARRAY_REF, eltype, >>build_string()<< ... */
++  tree type = TREE_TYPE (TREE_OPERAND (TREE_OPERAND (literal, 0), 0));
++
++  type = copy_node (type);
++  TREE_CHAIN (type) = get_identifier (identifier);
++
++  TREE_TYPE (TREE_OPERAND (TREE_OPERAND (literal, 0), 0)) = type;
++}
++
+ /* Fold a call to __builtin_FILE to a constant string.  */
+ 
+ static inline tree
+@@ -10400,7 +10417,11 @@ fold_builtin_FILE (location_t loc)
+ 	 __FILE__ macro so it appears appropriate to use the same file prefix
+ 	 mappings.  */
+       fname = remap_macro_filename (fname);
+-      return build_string_literal (fname);
++
++      tree literal = build_string_literal (fname);
++      builtin_string_literal_type_chain (literal, "__builtin_FILE");
++
++      return literal;
+     }
+ 
+   return build_string_literal ("");
+@@ -10416,7 +10437,10 @@ fold_builtin_FUNCTION ()
+   if (current_function_decl)
+     name = lang_hooks.decl_printable_name (current_function_decl, 0);
+ 
+-  return build_string_literal (name);
++  tree literal = build_string_literal (name);
++  builtin_string_literal_type_chain (literal, "__builtin_FUNCTION");
++
++  return literal;
+ }
+ 
+ /* Fold a call to __builtin_LINE to an integer constant.  */
+diff --git a/gcc/cp/decl.cc b/gcc/cp/decl.cc
+index ca00e9aea20..79305907118 100644
+--- a/gcc/cp/decl.cc
++++ b/gcc/cp/decl.cc
+@@ -5265,6 +5265,13 @@ cp_make_fname_decl (location_t loc, tree id, int type_dep)
+   tree type = cp_build_qualified_type (char_type_node, TYPE_QUAL_CONST);
+   type = build_cplus_array_type (type, domain);
+ 
++/* smuggle identifier w/ the type of the string cst, allowing varasm section selector to use it
++  specifically 'array type' chains arent expected or used by the existing code
++  which also means that chain gets undetected by the internal tree hashing & reuse
++  one side-effect is these become unique 'const char[N]' e.g. is_same would break */
++  type = copy_node (type);
++  TREE_CHAIN (type) = id;
++
+   if (init)
+     TREE_TYPE (init) = type;
+   else
+diff --git a/gcc/varasm.cc b/gcc/varasm.cc
+index b67a0b524db..6f1ba553452 100644
+--- a/gcc/varasm.cc
++++ b/gcc/varasm.cc
+@@ -875,8 +875,25 @@ mergeable_string_section (tree decl ATTRIBUTE_UNUSED,
+       const char *str;
+       HOST_WIDE_INT i;
+       int j, unit;
++
++      /* special case when string cst is artificial and
++	 was manually chained with an identifier node */
++      char identifier[22] = ".";
++      tree tail = TREE_CHAIN (TREE_TYPE (decl));
++      if (tail && TREE_CODE (tail) == IDENTIFIER_NODE)
++	{
++	  constexpr size_t remaining = sizeof (identifier) - 2;
++	  const char* ptr = IDENTIFIER_POINTER (tail);
++	  if (strlen (ptr) <= remaining)
++	    strncat (identifier, ptr, remaining);
++	  else
++	    warning (0, "ignored section identifier %qs", ptr);
++
++	  TREE_CHAIN (TREE_TYPE (decl)) = NULL_TREE;
++      }
++
+       const char *prefix = function_mergeable_rodata_prefix ();
+-      char *name = (char *) alloca (strlen (prefix) + 30);
++      char *name = (char *) alloca (strlen (prefix) + 30 + strlen(identifier));
+ 
+       mode = SCALAR_INT_TYPE_MODE (TREE_TYPE (TREE_TYPE (decl)));
+       modesize = GET_MODE_BITSIZE (mode);
+@@ -903,7 +920,7 @@ mergeable_string_section (tree decl ATTRIBUTE_UNUSED,
+ 	    }
+ 	  if (i == len - unit || (unit == 1 && i == len))
+ 	    {
+-	      sprintf (name, "%s.str%d.%d", prefix,
++	      sprintf (name, "%s%sstr%d.%d", prefix, identifier,
+ 		       modesize / 8, (int) (align / 8));
+ 	      flags |= (modesize / 8) | SECTION_MERGE | SECTION_STRINGS;
+ 	      return get_section (name, flags, NULL);
+-- 
+2.49.0
+
