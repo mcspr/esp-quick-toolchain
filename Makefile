@@ -617,6 +617,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 		$(MAKE) && $(MAKE) install) >> $(call log,$@) 2>&1
 	(cd $(call cross,$@)/lib ; \
 		ln -s libtinfo.a libtermcap.a) >> $(call log,$@) 2>&1
+	(cd $(call cross,$@)/lib ; \
+		ln -s libncurses.a libcurses.a) >> $(call log,$@) 2>&1
 	touch $@
 
 .NOTPARALLEL: .stage.%.gmp .stage.%.ncurses .stage.%.libexpat
