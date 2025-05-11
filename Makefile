@@ -698,20 +698,21 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 
 .stage.%.hal-config: .stage.%.libstdcpp-nox
 	echo STAGE: $@
-	rm -rf $(call arena,$@)/hal > $(call log,$@) 2>&1
-	mkdir -p $(call arena,$@)/hal >> $(call log,$@) 2>&1
-	(cd $(call arena,$@)/hal; \
+	rm -rf $(call arena,$@)/lx106-hal > $(call log,$@) 2>&1
+	mkdir -p $(call arena,$@)/lx106-hal >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/lx106-hal; \
 		$(call setenv,$@); \
-		$(REPODIR)/lx106-hal/configure $(call configure,$@) --host=$(TARGET_ARCH) CC=$(TARGET_ARCH)-cc) >> $(call log,$@) 2>&1
+		$(REPODIR)/lx106-hal/configure $(call configure,$@) \
+			--target=$(TARGET_ARCH) \
+			--host=$(TARGET_ARCH) \
+			--exec-prefix=$(call install,$@)/$(TARGET_ARCH)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.hal-make: .stage.%.hal-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/hal; \
+	(cd $(call arena,$@)/lx106-hal; \
 		$(call setenv,$@); \
 		$(MAKE) && $(MAKE) install) > $(call log,$@) 2>&1
-	(cd $(call install,$@)/$(TARGET_ARCH)/lib; \
-		cp -a $(call install,$@)/lib/libhal.a ./) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.strip: .stage.%.hal-make
@@ -846,15 +847,15 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 .stage.LINUX.arduino-toolchain:
 	echo "-------- Copying GCC and LIBSTDC++ libs"
 #	cp $(call install,$@)/lib/gcc/xtensa-lx106-elf/*/libgcc.a  $(ARDUINO)/tools/sdk/lib/.
-	cp -vu $(call install,$@)/xtensa-lx106-elf/lib/libstdc++-exc.a $(ARDUINO)/tools/sdk/lib/.
-	cp -vu $(call install,$@)/xtensa-lx106-elf/lib/libstdc++.a     $(ARDUINO)/tools/sdk/lib/.
+	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libstdc++-exc.a $(ARDUINO)/tools/sdk/lib/.
+	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libstdc++.a     $(ARDUINO)/tools/sdk/lib/.
 	echo "-------- Copying toolchain directory"
-	rm -rf $(ARDUINO)/tools/sdk/xtensa-lx106-elf
-	cp -va $(call install,$@)/xtensa-lx106-elf $(ARDUINO)/tools/sdk/xtensa-lx106-elf
+	rm -rf $(ARDUINO)/tools/sdk/$(TARGET_ARCH)
+	cp -va $(call install,$@)/$(TARGET_ARCH) $(ARDUINO)/tools/sdk/$(TARGET_ARCH)
 
 .stage.LINUX.arduino-hal:
 	echo "-------- Copying HAL lib"
-	cp -vu $(call install,$@)/lib/libhal.a $(ARDUINO)/tools/sdk/lib/.
+	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libhal.a $(ARDUINO)/tools/sdk/lib/.
 
 .stage.LINUX.arduino-package-json:
 	echo "-------- Updating package.json"
