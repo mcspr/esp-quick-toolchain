@@ -28,8 +28,16 @@ from ast_grep_py import SgRoot
 # ast-grep rules with nice syntax vs. nested dict()s
 import yaml
 
-# usually this gets called when patching GCC
-DEFAULT_ROOT = pathlib.Path(__file__).parent / "repo/gcc-gnu/libstdc++-v3/include"
+# libstdc++-v3 is the main target of the script
+DEFAULT_ROOT = pathlib.Path(__file__).parent / "repo/gcc-gnu/libstdc++-v3"
+
+# where to look for the sources
+DEFAULT_SEARCH = (
+    DEFAULT_ROOT / "include",
+    DEFAULT_ROOT / "libsupc++",
+    DEFAULT_ROOT / "src" / "c++11",
+    DEFAULT_ROOT / "src" / "c++17",
+)
 
 # any time rules below match, this header gets injected
 # TODO make sure patches/ has Makefile.in modifications
@@ -68,8 +76,10 @@ HELPER_HEADER_INCLUDE = f"#include <{HELPER_HEADER.as_posix()}>"
 
 
 def helper_header_path(root: pathlib.Path) -> pathlib.Path:
-    return root / HELPER_HEADER
+    return root / "include" / HELPER_HEADER
 
+
+DEFAULT_HELPER_HEADER = helper_header_path(DEFAULT_ROOT)
 
 # generic exception interface override
 # TODO see TS_WORKAROUND_REPLACEMENTS
@@ -224,9 +234,16 @@ rule:
 
 # declarations placed at the earliest namespace entrypoint
 NS_INSERT_ANCHORS = (
+    # found in headers
     "namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)",
     "namespace __gnu_pbds",
     "namespace std _GLIBCXX_VISIBILITY(default)",
+    # found in libsupc++ .cc
+    "namespace std",
+    # libsupc++/bad_alloc.cc
+    r"std::bad_alloc::~bad_alloc() _GLIBCXX_USE_NOEXCEPT { }",
+    # libsupc++/eh_exception.cc
+    r"std::exception::~exception() _GLIBCXX_TXN_SAFE_DYN _GLIBCXX_USE_NOEXCEPT { }",
 )
 
 
@@ -236,6 +253,9 @@ TS_WORKAROUND_REPLACEMENTS = (
     # causes `{ return "..."; }` to become initializer list & its list of entries
     ("_GLIBCXX_BEGIN_NAMESPACE_VERSION", "//LIBCXX_BEGIN_NAMESPACE_VERSION"),
     ("_GLIBCXX_END_NAMESPACE_VERSION", "//LIBCXX_END_NAMESPACE_VERSION"),
+    # causes `{ return "..."; }` to be misattibuted to these as function identifiers
+    ("_GLIBCXX_TXN_SAFE_DYN", "/* _GLIBCXX_TXN_SAFE_DYN */"),
+    ("_GLIBCXX_USE_NOEXCEPT", "/* _GLIBCXX_USE_NOEXCEPT */"),
 )
 
 
@@ -243,6 +263,7 @@ SRC_SUFFIXES = (
     # libstdc++ headers usually lack any suffix
     "",
     # implementation bits
+    ".cc",
     ".h",
     ".hpp",
     # templated bits
@@ -418,7 +439,7 @@ def worker(root: pathlib.Path, p: pathlib.Path, tagged_rules):
         out = node.commit_edits(inst.edits)
         out = tree_sitter_after_edit(out)
 
-        anchor = find_insert_anchor(data)
+        anchor = find_insert_anchor(out)
         if not anchor:
             raise ValueError(f"{p} found no suitable anchor")
 
@@ -474,35 +495,41 @@ def write_or_replace_helper_header(p: pathlib.Path):
     except:
         pass
 
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(HELPER_HEADER_SRC)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(HELPER_HEADER_SRC)
+    except:
+        pass
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--root", type=pathlib.Path, default=DEFAULT_ROOT)
+    parser.add_argument(
+        "--helper-header", type=pathlib.Path, default=DEFAULT_HELPER_HEADER
+    )
     parser.add_argument(
         "--output",
         type=argparse.FileType("w"),
         default=sys.stdout,
         help="logging output",
     )
+    parser.add_argument("search", type=pathlib.Path, nargs="*", default=DEFAULT_SEARCH)
     args = parser.parse_args()
 
     def log_file(tag: str, p: pathlib.Path):
         print(f"{tag} {p}", file=args.output)
 
-    helper_header = helper_header_path(args.root)
-    write_or_replace_helper_header(helper_header)
+    write_or_replace_helper_header(args.helper_header)
 
     executor = concurrent.futures.ProcessPoolExecutor()
     with executor as e:
         futures = [
-            e.submit(worker, args.root, p, RULES)
-            for p in find_files(args.root)
-            if p != helper_header
+            e.submit(worker, root, p, RULES)
+            for root in args.search
+            for p in find_files(root)
+            if p != args.helper_header
         ]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()

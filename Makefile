@@ -557,7 +557,11 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(set -x; cd $(REPODIR)/lx106-hal \
 		&& patch -s -p1 src/Makefile.am $(PATCHDIR)/hal-mawk.patch \
 		&& autoreconf -i) >> $(call log,$@) 2>&1
-	(set -x; ./libstd_flash_string_decls.py --root $(REPODIR)/$(GCC_DIR)/libstdc++-v3/include) >> $(call log,$@) 2>&1
+	(set -x; ./libstd_flash_string_decls.py \
+		$(REPODIR)/$(GCC_DIR)/libstdc++-v3/include \
+		$(REPODIR)/$(GCC_DIR)/libstdc++-v3/libsupc++ \
+		$(REPODIR)/$(GCC_DIR)/libstdc++-v3/src/c++11 \
+		$(REPODIR)/$(GCC_DIR)/libstdc++-v3/src/c++17) >> $(call log,$@) 2>&1
 
 .stage.%.start: .clean.%.deps .stage.patch
 	echo STAGE: $@
