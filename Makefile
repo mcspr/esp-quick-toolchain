@@ -350,7 +350,7 @@ configure_gmp_mpfr = \
 	--with-gmp=$(call arena,$(1))/cross \
 	--with-mpfr=$(call arena,$(1))/cross
 
-configure_ncurses = \
+CONFIGURE_NCURSES = \
 	--disable-widec \
 	--without-manpages \
 	--without-progs \
@@ -360,36 +360,29 @@ configure_ncurses = \
 	--with-termlib \
 	--with-versioned-syms
 
-configure_expat = \
+CONFIGURE_EXPAT = \
 	--without-docbook \
 	--without-xmlwf \
 	--without-examples \
 	--without-tests
 
 # Newlib configuration common
-CONFIGURENEWLIBCOM  = --with-newlib
-CONFIGURENEWLIBCOM += --enable-multilib
-CONFIGURENEWLIBCOM += --disable-newlib-io-c99-formats
-CONFIGURENEWLIBCOM += --disable-newlib-supplied-syscalls
-CONFIGURENEWLIBCOM += --enable-newlib-nano-formatted-io
-CONFIGURENEWLIBCOM += --enable-newlib-reent-small
-CONFIGURENEWLIBCOM += --enable-target-optspace
-CONFIGURENEWLIBCOM += --disable-option-checking
-CONFIGURENEWLIBCOM += --target=$(TARGET_ARCH)
-CONFIGURENEWLIBCOM += --disable-shared
+CONFIGURE_NEWLIB  = --with-newlib
+CONFIGURE_NEWLIB += --enable-multilib
+CONFIGURE_NEWLIB += --disable-newlib-io-c99-formats
+CONFIGURE_NEWLIB += --disable-newlib-supplied-syscalls
+CONFIGURE_NEWLIB += --enable-newlib-nano-formatted-io
+CONFIGURE_NEWLIB += --enable-newlib-reent-small
+CONFIGURE_NEWLIB += --enable-target-optspace
+CONFIGURE_NEWLIB += --disable-option-checking
+CONFIGURE_NEWLIB += --target=$(TARGET_ARCH)
+CONFIGURE_NEWLIB += --disable-shared
 
 # Configuration for newlib normal build
-configurenewlib  = --prefix=$(call install,$(1))
-configurenewlib += $(CONFIGURENEWLIBCOM)
+configure_newlib  = --prefix=$(call install,$(1))
+configure_newlib += $(CONFIGURE_NEWLIB)
 
-# Configuration for newlib install-to-arduino target
-CONFIGURENEWLIBINSTALL  = --prefix=$(ARDUINO)/tools/sdk/libc
-CONFIGURENEWLIBINSTALL += --with-target-subdir=$(TARGET_ARCH)
-CONFIGURENEWLIBINSTALL += $(CONFIGURENEWLIBCOM)
-
-# Configuration specific to macOS
-
-# GMP tries to test .s, which breaks on ./configure stage
+# For macOS targets, GMP tries to test .s on ./configure stage
 CONFIGURE_GMP_MACOSARM := --disable-assembly
 CONFIGURE_GMP_MACOSX86 := $(CONFIGURE_GMP_MACOSARM)
 
@@ -598,7 +591,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(cd $(call arena,$@)/libexpat; \
 		cp -r $(REPODIR)/expat-$(LIBEXPAT_VER)/* ./ ; \
 		bash buildconf.sh ;\
-		./configure $(call configure,$@) $(configure_expat) --prefix=$(call arena,$@)/cross ; \
+		./configure $(call configure,$@) $(CONFIGURE_EXPAT) --prefix=$(call arena,$@)/cross ; \
 		$(MAKE) && $(MAKE) install) >> $(call log,$@) 2>&1
 	touch $@
 
@@ -613,7 +606,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf $(call arena,$@)/ncurses > $(call log,$@) 2>&1
 	mkdir $(call arena,$@)/ncurses >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/ncurses ; \
-		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure $(call configure,$@) $(configure_ncurses) --prefix=$(call arena,$@)/cross ; \
+		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure $(call configure,$@) $(CONFIGURE_NCURSES) --prefix=$(call arena,$@)/cross ; \
 		$(MAKE) && $(MAKE) install) >> $(call log,$@) 2>&1
 	(cd $(call cross,$@)/lib ; \
 		ln -s libtinfo.a libtermcap.a) >> $(call log,$@) 2>&1
@@ -670,7 +663,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/newlib > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/newlib >> $(call log,$@) 2>&1
-	(cd $(call arena,$@)/newlib; $(call setenv,$@); $(REPODIR)/newlib/configure $(call configurenewlib,$@)) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/newlib; $(call setenv,$@); $(REPODIR)/newlib/configure $(call configure_newlib,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.newlib-make: .stage.%.newlib-config
@@ -691,20 +684,16 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	# We copy existing stdc, adjust the makefile, and build a single .a to save much time
 	rm -rf $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox > $(call log,$@) 2>&1
-	cp -a \
-		$(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3 \
-		$(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH); \
+		cp -a libstdc++-v3 libstdc++-v3-nox) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox; \
 		$(call setenv,$@); \
 		$(MAKE) clean; \
 		find . -name Makefile -exec sed -i 's/mlongcalls/mlongcalls -fno-exceptions/' \{\} \; ; \
 		$(MAKE)) >> $(call log,$@) 2>&1
-	cp \
-		$(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/libstdc++.a \
-		$(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/libstdc++-exc.a >> $(call log,$@) 2>&1
-	cp \
-		$(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a \
-		$(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/libstdc++.a >> $(call log,$@) 2>&1
+	(cd $(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/; \
+		cp libstdc++.a libstdc++-exc.a; \
+		cp $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a ./) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.hal-config: .stage.%.libstdcpp-nox
@@ -857,7 +846,6 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 
 .stage.LINUX.arduino-toolchain:
 	echo "-------- Copying GCC and LIBSTDC++ libs"
-#	cp $(call install,$@)/lib/gcc/$(TARGET_ARCH)/*/libgcc.a  $(ARDUINO)/tools/sdk/lib/.
 	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libstdc++-exc.a $(ARDUINO)/tools/sdk/lib/.
 	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libstdc++.a     $(ARDUINO)/tools/sdk/lib/.
 	echo "-------- Copying toolchain directory"
