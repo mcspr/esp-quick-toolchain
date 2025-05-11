@@ -203,6 +203,24 @@ THROWING_FUNC_NAMES = (
     "_M_check_length",
 )
 
+# std/variant declared weirdly
+# TODO GCC15 stores __throw_bad_variant_access strings nearby
+#      ref. 0dbc588acaa27a3a56bc9173bd577e1293f10046
+VARIANT_REASON_RULE = r"""
+utils:
+  default-value:
+    kind: string_literal
+    inside:
+      kind: field_declaration
+      has:
+        kind: pointer_declarator
+        has:
+          kind: field_identifier
+          regex: ^_M_reason$
+
+rule:
+  matches: default-value
+"""
 
 # declarations placed at the earliest namespace entrypoint
 NS_INSERT_ANCHORS = (
@@ -410,6 +428,7 @@ def worker(root: pathlib.Path, p: pathlib.Path, tagged_rules):
 
 RULES = {
     "what": [yaml.load(WHAT_RULE, Loader=yaml.CLoader)],
+    "reason": [yaml.load(VARIANT_REASON_RULE, Loader=yaml.CLoader)],
     "throw": [make_throwing_rule(name) for name in THROWING_FUNC_NAMES],
 }
 
