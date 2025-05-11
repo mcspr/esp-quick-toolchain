@@ -304,7 +304,7 @@ log    = log$(1)
 
 # For package.json and arduino build
 asys    = $($(call arch,$(1))_ASYS)
-tarball = $(call host,$(1)).xtensa-lx106-elf-$(REV).$(STAMP).$(call tarext,$(1))
+tarball = $(call host,$(1)).$(TARGET_ARCH)-$(REV).$(STAMP).$(call tarext,$(1))
 
 # sometimes called for ./configure
 configure_vars = $($(call arch,$(1))_CONFIGURE_VARS)
@@ -314,7 +314,7 @@ arena = $(PWD)/arena$(call ext,$(1))
 # The architecture for this recipe
 arch = $(subst .,,$(suffix $(basename $(1))))
 # This installation directory for this architecture
-install = $(PWD)/xtensa-lx106-elf$($(call arch,$(1))_EXT)
+install = $(PWD)/$(TARGET_ARCH)$($(call arch,$(1))_EXT)
 # Shared libraries build prefix
 cross = $(call arena,$(1))/cross
 ldflags = -L$(call cross,$(1))/lib
@@ -384,7 +384,7 @@ configurenewlib += $(CONFIGURENEWLIBCOM)
 
 # Configuration for newlib install-to-arduino target
 CONFIGURENEWLIBINSTALL  = --prefix=$(ARDUINO)/tools/sdk/libc
-CONFIGURENEWLIBINSTALL += --with-target-subdir=xtensa-lx106-elf
+CONFIGURENEWLIBINSTALL += --with-target-subdir=$(TARGET_ARCH)
 CONFIGURENEWLIBINSTALL += $(CONFIGURENEWLIBCOM)
 
 # Configuration specific to macOS
@@ -640,7 +640,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 		$(MAKE) LDFLAGS="$(BINUTILS_MAKE_LDFLAGS) $$LDFLAGS" \
 		&& $(MAKE) install) > $(call log,$@) 2>&1
 	(cd $(call install,$@)/bin; \
-		ln -sf xtensa-lx106-elf-gcc$(call exe,$@) xtensa-lx106-elf-cc$(call exe,$@)) >> $(call log,$@) 2>&1
+		ln -sf $(TARGET_ARCH)-gcc$(call exe,$@) $(TARGET_ARCH)-cc$(call exe,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 # statically link w/ the expat & ncurses & gmp & mpfr that were built locally
@@ -682,18 +682,29 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 .stage.%.libstdcpp: .stage.%.newlib-make
 	echo STAGE: $@
 	# stage 2 (build libstdc++)
-	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(MAKE)) > $(call log,$@) 2>&1
-	(cd $(call arena,$@)/$(GCC_DIR); $(call setenv,$@); $(MAKE) install) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(GCC_DIR); \
+		$(call setenv,$@); \
+		$(MAKE) && $(MAKE) install) > $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.libstdcpp-nox: .stage.%.libstdcpp
 	echo STAGE: $@
 	# We copy existing stdc, adjust the makefile, and build a single .a to save much time
-	rm -rf $(call arena,$@)/$(GCC_DIR)/xtensa-lx106-elf/libstdc++-v3-nox > $(call log,$@) 2>&1
-	cp -a $(call arena,$@)/$(GCC_DIR)/xtensa-lx106-elf/libstdc++-v3 $(call arena,$@)/$(GCC_DIR)/xtensa-lx106-elf/libstdc++-v3-nox >> $(call log,$@) 2>&1
-	(cd $(call arena,$@)/$(GCC_DIR)/xtensa-lx106-elf/libstdc++-v3-nox; $(call setenv,$@); $(MAKE) clean; find . -name Makefile -exec sed -i 's/mlongcalls/mlongcalls -fno-exceptions/' \{\} \; ; $(MAKE)) >> $(call log,$@) 2>&1
-	cp xtensa-lx106-elf$(call ext,$@)/xtensa-lx106-elf/lib/libstdc++.a xtensa-lx106-elf$(call ext,$@)/xtensa-lx106-elf/lib/libstdc++-exc.a >> $(call log,$@) 2>&1
-	cp $(call arena,$@)/$(GCC_DIR)/xtensa-lx106-elf/libstdc++-v3-nox/src/.libs/libstdc++.a xtensa-lx106-elf$(call ext,$@)/xtensa-lx106-elf/lib/libstdc++.a >> $(call log,$@) 2>&1
+	rm -rf $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox > $(call log,$@) 2>&1
+	cp -a \
+		$(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3 \
+		$(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox; \
+		$(call setenv,$@); \
+		$(MAKE) clean; \
+		find . -name Makefile -exec sed -i 's/mlongcalls/mlongcalls -fno-exceptions/' \{\} \; ; \
+		$(MAKE)) >> $(call log,$@) 2>&1
+	cp \
+		$(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/libstdc++.a \
+		$(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/libstdc++-exc.a >> $(call log,$@) 2>&1
+	cp \
+		$(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a \
+		$(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/libstdc++.a >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.hal-config: .stage.%.libstdcpp-nox
@@ -720,8 +731,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	($(call setenv,$@); \
 		$(call host,$@)-strip \
 		$(call install,$@)/bin/*$(call exe,$@) \
-		$(call install,$@)/libexec/gcc/xtensa-lx106-elf/*/c*$(call exe,$@) \
-		$(call install,$@)/libexec/gcc/xtensa-lx106-elf/*/lto1$(call exe,$@) || true ) > $(call log,$@) 2>&1
+		$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/c*$(call exe,$@) \
+		$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/lto1$(call exe,$@) || true ) > $(call log,$@) 2>&1
 	touch $@
 
 # see MACOSARM_CONFIGURE_VARS
@@ -740,10 +751,10 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	rm -rf pkg.$(call arch,$@) > $(call log,$@) 2>&1
 	mkdir -p pkg.$(call arch,$@) >> $(call log,$@) 2>&1
-	cp -a $(call install,$@) pkg.$(call arch,$@)/xtensa-lx106-elf >> $(call log,$@) 2>&1
-	(cd pkg.$(call arch,$@)/xtensa-lx106-elf; $(call setenv,$@); pkgdesc="xtensa-gcc"; pkgname="toolchain-xtensa"; $(call makepackagejson,$@)) >> $(call log,$@) 2>&1
+	cp -a $(call install,$@) pkg.$(call arch,$@)/$(TARGET_ARCH) >> $(call log,$@) 2>&1
+	(cd pkg.$(call arch,$@)/$(TARGET_ARCH); $(call setenv,$@); pkgdesc="xtensa-gcc"; pkgname="toolchain-xtensa"; $(call makepackagejson,$@)) >> $(call log,$@) 2>&1
 	(tarball=$(call tarball,$@) ; \
-	    cd pkg.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} xtensa-lx106-elf/ ; cd ..; $(call makejson,$@)) >> $(call log,$@) 2>&1
+	    cd pkg.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} $(TARGET_ARCH)/ ; cd ..; $(call makejson,$@)) >> $(call log,$@) 2>&1
 	rm -rf pkg.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
 
@@ -846,7 +857,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 
 .stage.LINUX.arduino-toolchain:
 	echo "-------- Copying GCC and LIBSTDC++ libs"
-#	cp $(call install,$@)/lib/gcc/xtensa-lx106-elf/*/libgcc.a  $(ARDUINO)/tools/sdk/lib/.
+#	cp $(call install,$@)/lib/gcc/$(TARGET_ARCH)/*/libgcc.a  $(ARDUINO)/tools/sdk/lib/.
 	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libstdc++-exc.a $(ARDUINO)/tools/sdk/lib/.
 	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libstdc++.a     $(ARDUINO)/tools/sdk/lib/.
 	echo "-------- Copying toolchain directory"
@@ -860,7 +871,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 .stage.LINUX.arduino-package-json:
 	echo "-------- Updating package.json"
 	ver=$(REL)-$(SUBREL)-$(REV); pkgfile=$(ARDUINO)/package/package_esp8266com_index.template.json; \
-	./patch_json.py --pkgfile "$${pkgfile}" --tool xtensa-lx106-elf-gcc --ver "$${ver}" --glob '*xtensa-lx106-elf*.json' ; \
+	./patch_json.py --pkgfile "$${pkgfile}" --tool $(TARGET_ARCH)-gcc --ver "$${ver}" --glob '*$(TARGET_ARCH)*.json' ; \
 	./patch_json.py --pkgfile "$${pkgfile}" --tool esptool --ver "$${ver}" --glob '*esptool*json' ; \
 	./patch_json.py --pkgfile "$${pkgfile}" --tool mkspiffs --ver "$${ver}" --glob '*mkspiffs*json'; \
 	./patch_json.py --pkgfile "$${pkgfile}" --tool mklittlefs --ver "$${ver}" --glob '*mklittlefs*json'
