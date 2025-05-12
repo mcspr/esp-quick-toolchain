@@ -925,7 +925,10 @@ upload: .stage.LINUX.upload
 	    python3 ../upload_release.py --user "$(GHUSER)" --token "$(GHTOKEN)" --tag $(REL)-$(SUBREL) --msg 'See https://github.com/esp8266/Arduino for more info'  --name "ESP8266 Quick Toolchain for $(REL)-$(SUBREL)" `find ../ -maxdepth 1 -name "*.tar.gz" -o -name "*.zip"` ;
 	rm -rf ./venv
 
-dumpvars:
-	echo SETENV:    '$(call setenv,.stage.LINUX.stage)'
-	echo CONFIGURE: '$(call configure,.stage.LINUX.stage)'
-	echo NEWLIBCFG: '$(call configurenewlib,.stage.LINUX.stage)'
+.stage.%.dumpvars:
+	echo SETENV:    '$(call setenv,$@)'
+	echo CONFIGURE: '$(call configure,$@)'
+	echo NEWLIBCFG: '$(call configure_newlib,$@)'
+	echo BINUTILSCFG: '$(call configure_binutils,$@)'
+	echo NCURSESCFG: '$(CONFIGURE_NCURSES)'
+	echo EXPATCFG: '$(CONFIGURE_EXPAT)'
