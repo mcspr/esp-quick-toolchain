@@ -350,7 +350,7 @@ configure_gmp_mpfr = \
 	--with-gmp=$(call arena,$(1))/cross \
 	--with-mpfr=$(call arena,$(1))/cross
 
-CONFIGURE_NCURSES = \
+CONFIGURE_NCURSES := \
 	--disable-widec \
 	--without-manpages \
 	--without-progs \
@@ -360,14 +360,19 @@ CONFIGURE_NCURSES = \
 	--with-termlib \
 	--with-versioned-syms
 
-CONFIGURE_EXPAT = \
+CONFIGURE_EXPAT := \
 	--without-docbook \
 	--without-xmlwf \
 	--without-examples \
 	--without-tests
 
+configure_binutils = \
+	--disable-sim \
+	$(call configure_gmp_mpfr,$(1)) \
+	$(call configure,$(1))
+
 # Newlib configuration common
-CONFIGURE_NEWLIB  = --with-newlib
+CONFIGURE_NEWLIB := --with-newlib
 CONFIGURE_NEWLIB += --enable-multilib
 CONFIGURE_NEWLIB += --disable-newlib-io-c99-formats
 CONFIGURE_NEWLIB += --disable-newlib-supplied-syscalls
@@ -627,7 +632,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	mkdir -p $(call arena,$@)/$(BINUTILS_DIR) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(BINUTILS_DIR); \
 		$(call setenv,$@); \
-		$(REPODIR)/$(BINUTILS_DIR)/configure --disable-sim $(call configure_gmp_mpfr,$@) $(call configure,$@)) >> $(call log,$@) 2>&1
+		$(REPODIR)/$(BINUTILS_DIR)/configure $(call configure_binutils,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.binutils-make: .stage.%.binutils-config
@@ -638,16 +643,34 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 		&& $(MAKE) install) > $(call log,$@) 2>&1
 	touch $@
 
-# statically link w/ the expat & ncurses & gmp & mpfr that were built locally
-# (nb. original code shadowed 'export LDFLAGS=...' via 'make LDFLAGS=...')
-.stage.%.binutils-make: BINUTILS_MAKE_LDFLAGS=-static
-.stage.MACOSARM.binutils-make .stage.MACOSX86.binutils-make: BINUTILS_MAKE_LDFLAGS = 
+.stage.%.binutils-make: BINUTILS_MAKE_LDFLAGS=
 
-# statically link w/ build host stdlib .dlls
-.stage.WIN32.binutils-make: BINUTILS_MAKE_LDFLAGS=-static -static-libgcc -static-libstdc++
-.stage.WIN64.binutils-make: BINUTILS_MAKE_LDFLAGS=-static -static-libgcc -static-libstdc++
+# statically link w/ build host standard libraries
+# TODO: c1a5d03a89a455d79f025c66dce83342de4d26ce introduces --with-static-standard-libraries
+.stage.WIN32.binutils-make: BINUTILS_MAKE_LDFLAGS=-static-libgcc -static-libstdc++
+.stage.WIN64.binutils-make: BINUTILS_MAKE_LDFLAGS=-static-libgcc -static-libstdc++
 
-.stage.%.gcc1-config: .stage.%.binutils-make
+# attempt to fix dynamic plugins loader
+# https://github.com/msys2/MINGW-packages/issues/7890
+# https://github.com/msys2/MINGW-packages/blob/68f7d4665c396a464536871b1de7b680a47a8fa7/mingw-w64-binutils/PKGBUILD#L150-L151
+.stage.%.binutils-post: .stage.%.binutils-make
+	echo STAGE: $@
+	rm -rf $(call arena,$@)/$(BINUTILS_DIR)/ld > $(call log,$@) 2>&1
+	mkdir -p $(call arena,$@)/$(BINUTILS_DIR)/ld >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/$(BINUTILS_DIR)/ld; \
+		$(call setenv,$@); \
+		$(REPODIR)/$(BINUTILS_DIR)/ld/configure \
+			$(call configure_binutils,$@) \
+			--enable-static=no \
+			--enable-shared \
+		&& $(MAKE) \
+		&& cp -v .libs/$(BINUTILS_PLUGINS) $(call install,$@)/lib/bfd-plugins/) >> $(call log,$@) 2>&1
+	touch $@
+
+.stage.%.binutils-post: BINUTILS_PLUGINS=libdep.so
+.stage.WIN32.binutils-post .stage.WIN64.binutils-post: BINUTILS_PLUGINS=libdep.dll
+
+.stage.%.gcc1-config: .stage.%.binutils-post
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/$(GCC_DIR) > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/$(GCC_DIR) >> $(call log,$@) 2>&1
@@ -724,6 +747,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	($(call setenv,$@); \
 		$(call host,$@)-strip \
 		$(call install,$@)/bin/*$(call exe,$@) \
+		$(call install,$@)/lib/bfd-plugins/* \
 		$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/c*$(call exe,$@) \
 		$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/lto1$(call exe,$@) || true ) > $(call log,$@) 2>&1
 	touch $@
