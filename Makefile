@@ -636,8 +636,6 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 		$(call setenv,$@); \
 		$(MAKE) LDFLAGS="$(BINUTILS_MAKE_LDFLAGS) $$LDFLAGS" \
 		&& $(MAKE) install) > $(call log,$@) 2>&1
-	(cd $(call install,$@)/bin; \
-		ln -sf $(TARGET_ARCH)-gcc$(call exe,$@) $(TARGET_ARCH)-cc$(call exe,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 # statically link w/ the expat & ncurses & gmp & mpfr that were built locally
@@ -661,6 +659,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 .stage.%.gcc1-make: .stage.%.gcc1-config
 	echo STAGE: $@
 	(cd $(call arena,$@)/$(GCC_DIR) && $(call setenv,$@) && $(MAKE) all-gcc && $(MAKE) install-gcc) > $(call log,$@) 2>&1
+	(cd $(call install,$@)/bin; \
+		ln -sf $(TARGET_ARCH)-gcc$(call exe,$@) $(TARGET_ARCH)-cc$(call exe,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.newlib-config: .stage.%.gcc1-make
