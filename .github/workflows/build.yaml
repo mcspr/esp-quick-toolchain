@@ -38,6 +38,7 @@ jobs:
           echo foobar > .ghtoken
 
       - name: build
+        id: build
         run: |
           docker run \
             --rm \
@@ -46,6 +47,18 @@ jobs:
             -v $(pwd):/workdir \
             earlephilhower/gcc-cross-v12 \
               bash -c "cd /workdir; make GCC=14.2 REL=4.0.0 .stage.${{ github.event.inputs.name }}.done"
+
+      - name: logs .zip
+        if: failure() || steps.build.outcome == 'failure'
+        run: |
+          time zip --quiet Logs.zip log.*
+
+      - name: upload .zip
+        if: failure() || steps.build.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Logs
+          path: Logs.zip
 
       - uses: ncipollo/release-action@v1
         with:
