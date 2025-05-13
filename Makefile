@@ -729,9 +729,11 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/lx106-hal > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/lx106-hal >> $(call log,$@) 2>&1
+	# note the CC=... to override possibly injected variable after calling 'configure'
 	(cd $(call arena,$@)/lx106-hal; \
 		$(call setenv,$@); \
 		$(REPODIR)/lx106-hal/configure $(call configure,$@) \
+			CC=$(TARGET_ARCH)-gcc \
 			--target=$(TARGET_ARCH) \
 			--host=$(TARGET_ARCH) \
 			--exec-prefix=$(call install,$@)/$(TARGET_ARCH)) >> $(call log,$@) 2>&1
