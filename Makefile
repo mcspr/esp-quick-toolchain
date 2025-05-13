@@ -562,7 +562,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(set -x; cd $(REPODIR)/lx106-hal \
 		&& patch -s -p1 src/Makefile.am $(PATCHDIR)/hal-mawk.patch \
 		&& autoreconf -i) >> $(call log,$@) 2>&1
-	(set -x; ./libstd_flash_string_decls.py \
+	(set -x; ./dist/libstd_flash_string_decls/libstd_flash_string_decls \
 		$(REPODIR)/$(GCC_DIR)/libstdc++-v3/include \
 		$(REPODIR)/$(GCC_DIR)/libstdc++-v3/libsupc++ \
 		$(REPODIR)/$(GCC_DIR)/libstdc++-v3/src/c++11 \
