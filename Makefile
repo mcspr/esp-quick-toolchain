@@ -130,10 +130,10 @@ else ifeq ($(GCC), 14.2)
     ISL           := 0.18
     GCC_BRANCH    := releases/gcc-14.2.0
     GCC_PKGREL    := 140200
-    GCC_REPO      := https://gcc.gnu.org/git/gcc.git
+    GCC_REPO      := https://github.com/gcc-mirror/gcc.git
     GCC_DIR       := gcc-gnu
     BINUTILS_BRANCH := binutils-2_44
-    BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
+    BINUTILS_REPO := https://github.com/bminor/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else
     $(error Need to specify a supported GCC version "GCC={4.8, 4.9, 5.2, 7.2, 9.3, 10.1, 10.2, 10.3, 14.2}")
@@ -478,9 +478,9 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 # Download the needed GIT and tarballs
 .stage.gitclone: .clean.gitclone | $(REPODIR)
 	echo STAGE: $@
-	(test -d $(REPODIR)/$(BINUTILS_DIR) || git clone $(BINUTILS_REPO)                               $(REPODIR)/$(BINUTILS_DIR) ) > $(call log,$@) 2>&1
-	(test -d $(REPODIR)/$(GCC_DIR)      || git clone $(GCC_REPO)                                    $(REPODIR)/$(GCC_DIR) ) >> $(call log,$@) 2>&1
-	(test -d $(REPODIR)/newlib          || git clone https://github.com/mcspr/newlib-xtensa.git     $(REPODIR)/newlib      ) >> $(call log,$@) 2>&1
+	(test -d $(REPODIR)/$(BINUTILS_DIR) || git clone -b $(BINUTILS_BRANCH) $(BINUTILS_REPO) $(REPODIR)/$(BINUTILS_DIR) ) > $(call log,$@) 2>&1
+	(test -d $(REPODIR)/$(GCC_DIR)      || git clone -b $(GCC_BRANCH) $(GCC_REPO) $(REPODIR)/$(GCC_DIR) ) >> $(call log,$@) 2>&1
+	(test -d $(REPODIR)/newlib          || git clone -b $(NEWLIB_BRANCH) https://github.com/mcspr/newlib-xtensa.git $(REPODIR)/newlib      ) >> $(call log,$@) 2>&1
 	(test -d $(REPODIR)/lx106-hal       || git clone https://github.com/$(GHUSER)/lx106-hal.git     $(REPODIR)/lx106-hal   ) >> $(call log,$@) 2>&1
 	(test -d $(REPODIR)/mkspiffs        || git clone https://github.com/$(GHUSER)/mkspiffs.git      $(REPODIR)/mkspiffs    ) >> $(call log,$@) 2>&1
 	(test -d $(REPODIR)/mklittlefs      || git clone https://github.com/$(GHUSER)/mklittlefs.git    $(REPODIR)/mklittlefs  ) >> $(call log,$@) 2>&1
