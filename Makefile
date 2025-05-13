@@ -514,23 +514,21 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 # Prep externally fetched urls & local archives
 .stage.blobs: .stage.checkout | $(REPODIR)
 	echo STAGE: $@
-	for url in $(URLS) ; do \
+	(for url in $(URLS) ; do \
 	    archive=$${url##*/}; name=$${archive%.t*}; base=$${name%-*}; ext=$${archive##*.} ; \
-	    echo "-------- getting $${url}" ; \
-	    cd $(REPODIR) && ( test -r $${archive} || wget -o ${{archive}} $${url} ) ; \
-	    case "$${ext}" in \
-	        bz2) (cd $(REPODIR); tar -x --bzip2 -f $${archive};);; \
-	        gz)  (cd $(REPODIR); tar -x --gzip -f $${archive};);; \
-	        lz)  (cd $(REPODIR); tar -x --lzip -f $${archive};);; \
-	        xz)  (cd $(REPODIR); tar -x --lzma -f $${archive};);; \
-	        zip) (cd $(REPODIR); unzip -u $${archive};);; \
-	    esac ; \
-	done >> $(call log,$@) 2>&1
+		test -r $(REPODIR)/$${archive} || wget -T60 -v -O $(REPODIR)/$${archive} $${url} ; \
+		(cd $(REPODIR); \
+			case "$${ext}" in \
+				(bz2|gz|lz|xz) tar xf $${archive} ;; \
+				(zip) unzip -qu $${archive} ;; \
+				(*) echo -e "\e[1;33mUnknown archive type '$${ext}'\e[0m" ; exit 1 ;; \
+			esac && echo "-------- unpacked $${archive}") ; \
+	done) > $(call log,$@) 2>&1
 	(cd $(REPODIR)/$(GCC_DIR); \
-		echo "-------- unpacking $(LIBELF_BLOB)" ; \
-		tar xfz $(LIBELF_BLOB); \
-		rm -rf libelf; \
-		ln -s libelf-$(LIBELF_VER) libelf) >> $(call log,$@) 2>&1
+		tar xfz $(LIBELF_BLOB) \
+		&& echo "-------- unpacked $(LIBELF_BLOB)" \
+		&& rm -rf libelf \
+		&& ln -s libelf-$(LIBELF_VER) libelf) >> $(call log,$@) 2>&1
 
 # Apply our patches
 .stage.patch: .stage.blobs .stage.checkout
