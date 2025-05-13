@@ -488,10 +488,12 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 
 # Completely clean out a git directory, removing any untracked files
 .clean.%.git: | $(REPODIR) $(REPODIR)/$(call arch,$@)
-	echo STAGE: $@
-	(cd $(REPODIR)/$(call arch,$@) \
+	(test -d $(REPODIR)/$(call arch,$@) \
+		&& cd $(REPODIR)/$(call arch,$@) \
 		&& git reset --hard \
-		&& git clean -f -d)
+		&& git clean -f -d) \
+	&& echo "CLEAN: $@" \
+	|| echo "SKIP: $@"
 
 .clean.%.deps:
 	echo STAGE: $@
