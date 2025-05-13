@@ -487,7 +487,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	(test -d $(REPODIR)/esptool         || git clone https://github.com/$(GHUSER)/esptool-ck.git    $(REPODIR)/esptool     ) >> $(call log,$@) 2>&1
 
 # Completely clean out a git directory, removing any untracked files
-.clean.%.git: | $(REPODIR) $(REPODIR)/$(call arch,$@)
+.clean.%.git: | $(REPODIR)
 	(test -d $(REPODIR)/$(call arch,$@) \
 		&& cd $(REPODIR)/$(call arch,$@) \
 		&& git reset --hard \
