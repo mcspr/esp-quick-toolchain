@@ -1,0 +1,49 @@
+name: build
+
+on:
+  workflow_dispatch:
+    inputs:
+      name: 
+        type: choice
+        options:
+        - ARM64
+        - LINUX
+        - LINUX32
+        - MACOSARM
+        - MACOSX86
+        - RPI
+        - WIN32
+        - WIN64
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: mcspr/esp-quick-toolchain
+          ref: ci/gcc14
+
+      - name: pre
+        run: |
+          echo earlephilhower > .ghuser
+          echo foobar > .ghtoken
+
+      - name: build
+        run: |
+          docker run \
+            --rm \
+            --user $(id -u):$(id -g) \
+            -v $(pwd):/workdir \
+            earlephilhower/gcc-cross-v12 \
+              bash -c "cd /workdir; make -j32 GCC=14.2 REL=4.0.0 .stage.${{ github.event.inputs.name }}.done"
+
+      - uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifacts: "*.tar.gz,*.tar.gz.json,*.zip,*.zip.json"
+          prerelease: true
+          tag: "v4.0.0"
+
