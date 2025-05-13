@@ -147,7 +147,9 @@ LX106_HAL_BRANCH := e4bcc63c9c016e4f8848e7e8f512438ca857531d
 # MKSPIFFS must stay at 0.2.0 until Arduino boards.txt.py fixes non-page-aligned sizes
 MKSPIFFS_BRANCH := 0.2.0
 
-MKLITTLEFS_BRANCH := 4.0.2
+# MKLITTLEFS must be in sync with the Arduino littlefs version
+# 4.x.x pins littlefs==2.9.3, which cannot be read by littlefs<2.6.0
+MKLITTLEFS_BRANCH := 4.0.2-littlefs251
 
 # libelf shared by the repo here
 LIBELF_VER = 0.8.13
