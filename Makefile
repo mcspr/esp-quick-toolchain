@@ -830,7 +830,8 @@ endif
 	rm -rf pkg.mklittlefs.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
 
-.stage.%.esptool: .stage.%.start
+# TODO can be built, but isn't distributed
+.stage.%.esptool:
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/esptool > $(call log,$@) 2>&1
 	cp -a $(REPODIR)/esptool $(call arena,$@)/esptool >> $(call log,$@) 2>&1
@@ -863,7 +864,7 @@ endif
 .stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: CXX=$(call host,$@)-c++
 .stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: STRIP=touch
 
-.stage.%.done: .stage.%.package .stage.%.mkspiffs .stage.%.esptool .stage.%.mklittlefs
+.stage.%.done: .stage.%.package .stage.%.mkspiffs .stage.%.mklittlefs
 	echo STAGE: $@
 	echo Done building $(call arch,$@)
 	touch $@
