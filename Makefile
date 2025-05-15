@@ -348,9 +348,10 @@ configure += --with-libstdcxx-eh-pool-obj-count=4
 endif
 
 # Shared dependencies
-configure_gmp_mpfr = \
+configure_with_gmp = \
 	--with-gmp=$(call arena,$(1))/cross \
-	--with-mpfr=$(call arena,$(1))/cross
+	--with-mpfr=$(call arena,$(1))/cross \
+	--with-mpc=$(call arena,$(1))/cross
 
 CONFIGURE_NCURSES := \
 	--disable-widec \
@@ -370,7 +371,7 @@ CONFIGURE_EXPAT := \
 
 configure_binutils = \
 	--disable-sim \
-	$(call configure_gmp_mpfr,$(1)) \
+	$(call configure_with_gmp,$(1)) \
 	$(call configure,$(1))
 
 # Newlib configuration common
@@ -578,17 +579,33 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 .stage.%.gmp: .stage.%.start
 	echo STAGE: $@
 	(cd $(call arena,$@); \
-        rm -rf gmp-$(GMP_VER) mpfr-$(MPFR_VER)) > $(call log,$@) 2>&1
+        rm -rf gmp-$(GMP_VER) mpfr-$(MPFR_VER) mpc-$(MPC_VER)) > $(call log,$@) 2>&1
 	(cd $(call arena,$@); \
-		mkdir gmp-$(GMP_VER) mpfr-$(MPFR_VER)) >> $(call log,$@) 2>&1
+		mkdir gmp-$(GMP_VER) mpfr-$(MPFR_VER) mpc-$(MPC_VER)) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/gmp-$(GMP_VER); $(call setenv,$@); \
-		$(REPODIR)/gmp-$(GMP_VER)/configure $(GMP_CONFIGURE_FLAGS) $(call configure,$@) --target=$(call host,$@) --prefix=$(call arena,$@)/cross \
-			&& $(MAKE) \
-			&& $(MAKE) install) >> $(call log,$@) 2>&1
+		$(REPODIR)/gmp-$(GMP_VER)/configure \
+			$(GMP_CONFIGURE_FLAGS) \
+			$(call configure,$@) \
+				--target=$(call host,$@) \
+				--prefix=$(call arena,$@)/cross \
+		&& $(MAKE) \
+		&& $(MAKE) install) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/mpfr-$(MPFR_VER); $(call setenv,$@); \
-		$(REPODIR)/mpfr-$(MPFR_VER)/configure $(call configure,$@) $(call configure_gmp_mpfr,$@) --target=$(call host,$@) --prefix=$(call arena,$@)/cross \
-			&& $(MAKE) \
-			&& $(MAKE) install) >> $(call log,$@) 2>&1
+		$(REPODIR)/mpfr-$(MPFR_VER)/configure \
+			$(call configure,$@) \
+			$(call configure_with_gmp,$@) \
+			--target=$(call host,$@) \
+			--prefix=$(call arena,$@)/cross \
+		&& $(MAKE) \
+		&& $(MAKE) install) >> $(call log,$@) 2>&1
+	(cd $(call arena,$@)/mpc-$(MPC_VER); $(call setenv,$@); \
+		$(REPODIR)/mpc-$(MPC_VER)/configure \
+			$(call configure,$@) \
+			$(call configure_with_gmp,$@) \
+			--target=$(call host,$@) \
+			--prefix=$(call arena,$@)/cross \
+		&& $(MAKE) \
+		&& $(MAKE) install) >> $(call log,$@) 2>&1
 	touch $@
 
 # ./configure cannot comprehend cross-toolchain output
@@ -617,8 +634,12 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	rm -rf $(call arena,$@)/ncurses > $(call log,$@) 2>&1
 	mkdir $(call arena,$@)/ncurses >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/ncurses ; \
-		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure $(call configure,$@) $(CONFIGURE_NCURSES) --prefix=$(call arena,$@)/cross ; \
-		$(MAKE) && $(MAKE) install) >> $(call log,$@) 2>&1
+		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure \
+			$(call configure,$@) \
+			$(CONFIGURE_NCURSES) \
+			--prefix=$(call arena,$@)/cross \
+		&& $(MAKE) \
+		&& $(MAKE) install) >> $(call log,$@) 2>&1
 	(cd $(call cross,$@)/lib ; \
 		ln -s libtinfo.a libtermcap.a) >> $(call log,$@) 2>&1
 	(cd $(call cross,$@)/lib ; \
@@ -634,7 +655,8 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 	mkdir -p $(call arena,$@)/$(BINUTILS_DIR) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(BINUTILS_DIR); \
 		$(call setenv,$@); \
-		$(REPODIR)/$(BINUTILS_DIR)/configure $(call configure_binutils,$@)) >> $(call log,$@) 2>&1
+		$(REPODIR)/$(BINUTILS_DIR)/configure \
+			$(call configure_binutils,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.binutils-make: .stage.%.binutils-config
@@ -680,7 +702,9 @@ endif
 	mkdir -p $(call arena,$@)/$(GCC_DIR) >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(GCC_DIR); \
 		$(call setenv,$@); \
-		$(REPODIR)/$(GCC_DIR)/configure $(call configure_gmp_mpfr,$@) $(call configure,$@)) >> $(call log,$@) 2>&1
+		$(REPODIR)/$(GCC_DIR)/configure \
+			$(call configure_with_gmp,$@) \
+			$(call configure,$@)) >> $(call log,$@) 2>&1
 	touch $@
 
 .stage.%.gcc1-make: .stage.%.gcc1-config
@@ -734,7 +758,8 @@ endif
 	# note the CC=... to override possibly injected variable after calling 'configure'
 	(cd $(call arena,$@)/lx106-hal; \
 		$(call setenv,$@); \
-		$(REPODIR)/lx106-hal/configure $(call configure,$@) \
+		$(REPODIR)/lx106-hal/configure \
+			$(call configure,$@) \
 			CC=$(TARGET_ARCH)-gcc \
 			--target=$(TARGET_ARCH) \
 			--host=$(TARGET_ARCH) \
