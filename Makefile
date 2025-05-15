@@ -830,8 +830,8 @@ endif
 	rm -rf pkg.mklittlefs.$(call arch,$@) >> $(call log,$@) 2>&1
 	touch $@
 
-# TODO can be built, but isn't distributed
-.stage.%.esptool:
+# TODO esptool-ck was deprecated in favour of esptool-py a long time ago
+.stage.%.esptool: .stage.%.start
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/esptool > $(call log,$@) 2>&1
 	cp -a $(REPODIR)/esptool $(call arena,$@)/esptool >> $(call log,$@) 2>&1
@@ -864,7 +864,7 @@ endif
 .stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: CXX=$(call host,$@)-c++
 .stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: STRIP=touch
 
-.stage.%.done: .stage.%.package .stage.%.mkspiffs .stage.%.mklittlefs
+.stage.%.done: .stage.%.package .stage.%.mkspiffs .stage.%.mklittlefs .stage.%.esptool
 	echo STAGE: $@
 	echo Done building $(call arch,$@)
 	touch $@
