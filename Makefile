@@ -657,7 +657,7 @@ clean: .cleaninst.LINUX.clean .cleaninst.LINUX32.clean .cleaninst.WIN32.clean .c
 # https://github.com/msys2/MINGW-packages/blob/68f7d4665c396a464536871b1de7b680a47a8fa7/mingw-w64-binutils/PKGBUILD#L150-L151
 .stage.%.binutils-post: .stage.%.binutils-make
 	echo STAGE: $@
-ifeq ($(GCC), 14.2)
+ifeq ($(BINUTILS_BRANCH),binutils-2_44)
 	rm -rf $(call arena,$@)/$(BINUTILS_DIR)/ld > $(call log,$@) 2>&1
 	mkdir -p $(call arena,$@)/$(BINUTILS_DIR)/ld >> $(call log,$@) 2>&1
 	(cd $(call arena,$@)/$(BINUTILS_DIR)/ld; \
