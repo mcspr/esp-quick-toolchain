@@ -720,7 +720,7 @@ endif
 			$(call patch,$$p); \
 		done ) $(call log_stage,$@)
 
-.stage.newlib.patch: .git.lx106-hal.patch .git.newlib.checkout
+.stage.newlib.patch: .stage.lx106-hal.patch .git.newlib.checkout
 	echo STAGE: $@
 	(cd $(REPODIR)/$(newlib_DIR); \
 		for p in $(PATCHDIR)/lib-*.patch $(PATCHDIR)/gcc$(GCC)/lib-*.patch; do \
@@ -741,7 +741,7 @@ endif
 	(cd $(REPODIR)/$(lx106-hal_DIR); \
 		set -x; autoreconf -i ) $(call log,$@)
 
-.stage.mkspiffs.patch: .stage.fetch
+.stage.mkspiffs.patch: .git.mkspiffs.checkout
 	echo STAGE: $@
 	(cd $(REPODIR)/$(mkspiffs_DIR); \
 		for p in $(PATCHDIR)/mkspiffs/$(mkspiffs_BRANCH)*.patch; do \
@@ -749,6 +749,7 @@ endif
 		done ) $(call log_stage,$@)
 
 .stage.%.patch:
+	echo STAGE: $@
 
 # Apply all patches
 PATCH_REPOS = $(patsubst %,.stage.%.patch,$(REPOS))
@@ -1070,7 +1071,7 @@ endif
 		cp $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a ./) $(call log,$@)
 	touch $@
 
-.stage.%.strip: .stage.%.libstdcpp-nox
+.stage.%.strip: .stage.%.libstdcpp .stage.%.libstdcpp-nox
 	echo STAGE: $@
 	($(call setenv,$@); \
 		$(call host,$@)-strip \
@@ -1081,7 +1082,7 @@ endif
 	touch $@
 
 # see MACOSARM_CONFIGURE_FLAGS, strip is no-op
-.stage.MACOSARM.strip: .stage.MACOSARM.libstdcpp-nox
+.stage.MACOSARM.strip: .stage.MACOSARM.libstdcpp .stage.MACOSARM.libstdcpp-nox
 	echo STAGE: $@
 	touch $@
 
@@ -1092,21 +1093,18 @@ endif
 	done $(call log_stage,$@)
 	touch $@
 
-#.stage.%.package: .stage.%.post
-.stage.%.package:
+.stage.%.package: .stage.%.post
 	echo STAGE: $@
 	rm -rf pkg.$(call arch,$@) $(call log_stage,$@)
 	mkdir -p pkg.$(call arch,$@) $(call log,$@)
 	cp -a $(call install,$@) pkg.$(call arch,$@)/$(TARGET_ARCH) $(call log,$@)
 	(cd pkg.$(call arch,$@)/$(TARGET_ARCH); \
 		$(call make_package_json,toolchain-xtensa,xtensa-gcc,$(call asys,$@)) ) $(call log,$@)
-	echo before
 	(tarball=$(call tarball,$@) \
 	    && cd pkg.$(call arch,$@) \
 		&& $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} $(TARGET_ARCH)/ \
 		&& cd .. \
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
-	echo after
 	rm -rf pkg.$(call arch,$@) $(call log,$@)
 	touch $@
 
