@@ -17,7 +17,9 @@ PATCHDIR := $(PWD)/patches
 STAMP    := $(shell date +%y%m%d)
 REV      := $(shell git rev-parse --short HEAD)
 
-# For uploading, the GH user and PAT
+# For downloading FROM Github, only GHUSER must be set
+# For uploading TO Github, both GHUSER and GHTOKEN must be set
+# Guard for both to avoid duplicating errors down below
 GHUSER := $(if $(GHUSER),$(GHUSER),$(shell cat .ghuser))
 GHTOKEN := $(if $(GHTOKEN),$(GHTOKEN),$(shell cat .ghtoken))
 ifeq ($(GHUSER),)
