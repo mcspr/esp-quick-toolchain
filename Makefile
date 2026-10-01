@@ -233,7 +233,6 @@ LTO := $(if $(lto),$(lto),false)
 
 # Currently supported targets
 BUILD_TARGETS := LINUX LINUX32 ARM64 RPI WIN64 WIN32 MACOSARM MACOSX86
-BUILD_DONE = $(patsubst %,.stage.%.done,$(BUILD_TARGETS))
 
 # Define the build and output naming, don't use directly (see below)
 # currently not using ..._STATIC, but it would be called for tools builds
@@ -437,7 +436,7 @@ CONFIGURE_NCURSES := \
 	--enable-pc-files \
 	--enable-symlinks \
 	--enable-termcap \
-	--with-build-cppflags="-D_GNU_SOURCE -DNCURSES_STATIC" \
+	--with-build-cppflags=-D_GNU_SOURCE \
 	--with-fallbacks=xterm,xterm-256color,screen-256color,linux,vt100 \
 	--with-normal \
 	--without-ada \
@@ -619,6 +618,7 @@ linux default: .stage.LINUX.done
 .PHONY: .stage.%.start
 
 # Build all toolchain versions
+BUILD_DONE = $(patsubst %,.stage.%.done,$(BUILD_TARGETS))
 all: $(BUILD_DONE)
 	echo STAGE: $@
 	echo All complete
@@ -699,22 +699,11 @@ CHECKOUT_REPOS = $(patsubst %,.git.%.checkout,$(REPOS))
 				(*) echo " ERROR Unknown archive type $${ext}" ; exit 1 ;; \
 			esac && echo " BLOB $${archive}") ; \
 	done) $(call log_stage,$@)
-
-.stage.blobs: .stage.fetch .git.gcc.checkout | $(REPODIR)
-	echo STAGE: $@
 	(cd $(REPODIR) \
 		&& tar xf $(LIBELF_BLOB) \
 		&& echo " BLOB libelf-$(LIBELF_BLOB)" ) $(call log_stage,$@)
-	(cd $(REPODIR)/$(gcc_DIR) \
-		&& rm -rf libelf \
-		&& ln -sf ../libelf-$(LIBELF_VER) libelf \
-		&& echo " LINK $(gcc_DIR)/libelf <- libelf-$(LIBELF_VER)" ) $(call log,$@)
-ifeq ($(GCC_MAJOR), 4)
-	(cd $(REPODIR)/$(gcc_DIR) \
-		&& rm -rf cloog \
-		&& ln -sf ../cloog-$(CLOOG_VER) cloog \
-		&& echo " LINK $(gcc_DIR)/cloog <- cloog-$(CLOOG_VER)" ) $(call log,$@)
-endif
+
+.stage.blobs: .stage.fetch .git.gcc.checkout | $(REPODIR)
 
 # Checkout and reset, then apply patches to the local GIT repos
 patch = \
@@ -727,6 +716,17 @@ patch = \
 		for p in $(PATCHDIR)/gcc-*.patch $(PATCHDIR)/gcc$(GCC)/gcc-*.patch; do \
 			$(call patch,$$p); \
 		done ) $(call log_stage,$@)
+	# external dependencies could be built as part of the tree
+	(cd $(REPODIR)/$(gcc_DIR) \
+		&& rm -rf libelf \
+		&& ln -sf ../libelf-$(LIBELF_VER) libelf \
+		&& echo " LINK $(gcc_DIR)/libelf <- libelf-$(LIBELF_VER)" ) $(call log,$@)
+ifeq ($(GCC_MAJOR), 4)
+	(cd $(REPODIR)/$(gcc_DIR) \
+		&& rm -rf cloog \
+		&& ln -sf ../cloog-$(CLOOG_VER) cloog \
+		&& echo " LINK $(gcc_DIR)/cloog <- cloog-$(CLOOG_VER)" ) $(call log,$@)
+endif
 
 .stage.binutils.patch: .git.binutils.checkout
 	echo STAGE: $@
