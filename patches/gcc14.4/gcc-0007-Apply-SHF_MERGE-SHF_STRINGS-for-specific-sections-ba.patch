@@ -1,7 +1,7 @@
-From 9b9fd5070c27174fd588e7a62c6d867dd6aafad5 Mon Sep 17 00:00:00 2001
+From 4573ac401842a25b8a72a7ebb9ac63546da5c6f7 Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
 Date: Mon, 28 Apr 2025 14:00:50 +0300
-Subject: [PATCH 06/13] Apply SHF_MERGE | SHF_STRINGS for specific sections
+Subject: [PATCH 07/14] Apply SHF_MERGE | SHF_STRINGS for specific sections
  based on prefix
 
 aka objcopy --set-section-flags=.foobar=strings,merge but w/o actually calling objcopy
@@ -13,25 +13,17 @@ emitting `.section `, which no longer works correctly as compiler expects unquot
 
 For the releases/gcc-14.4.0
 ---
- gcc/config/xtensa/xtensa.cc                   | 60 +++++++++++++++++++
+ gcc/config/xtensa/xtensa.cc                   | 59 +++++++++++++++++++
  gcc/config/xtensa/xtensa.opt                  |  4 ++
  gcc/testsuite/gcc.target/xtensa/flashstring.c | 27 +++++++++
- 3 files changed, 91 insertions(+)
+ 3 files changed, 90 insertions(+)
  create mode 100644 gcc/testsuite/gcc.target/xtensa/flashstring.c
 
 diff --git a/gcc/config/xtensa/xtensa.cc b/gcc/config/xtensa/xtensa.cc
-index 4e3be3c39da..b25395aafcc 100644
+index d15b0463a9b..a8a4cfc0717 100644
 --- a/gcc/config/xtensa/xtensa.cc
 +++ b/gcc/config/xtensa/xtensa.cc
-@@ -52,6 +52,7 @@ along with GCC; see the file COPYING3.  If not see
- #include "langhooks.h"
- #include "gimplify.h"
- #include "builtins.h"
-+#include "opts.h"
- #include "dumpfile.h"
- #include "hw-doloop.h"
- #include "rtl-iter.h"
-@@ -2844,6 +2845,55 @@ xtensa_return_in_msb (const_tree valtype)
+@@ -3032,6 +3032,55 @@ xtensa_return_in_msb (const_tree valtype)
  }
  
  
@@ -87,7 +79,7 @@ index 4e3be3c39da..b25395aafcc 100644
  static void
  xtensa_option_override (void)
  {
-@@ -2898,6 +2948,10 @@ xtensa_option_override (void)
+@@ -3086,6 +3135,10 @@ xtensa_option_override (void)
  	}
      }
  
@@ -98,11 +90,11 @@ index 4e3be3c39da..b25395aafcc 100644
    init_machine_status = xtensa_init_machine_status;
  
    /* Check PIC settings.  PIC is only supported when using L32R
-@@ -4407,6 +4461,12 @@ xtensa_multibss_section_type_flags (tree decl, const char *name, int reloc)
+@@ -4603,6 +4656,12 @@ xtensa_multibss_section_type_flags (tree decl, const char *name, int reloc)
  		 "%<.bss%> section");
      }
  
-+  if (xtensa_has_flash_string_section_prefix (name)
++  if (xtensa_has_flash_string_section_prefix (name))
 +  {
 +    flags &= ~(SECTION_NOTYPE);
 +    flags |= SECTION_MERGE | SECTION_STRINGS | (SECTION_ENTSIZE & 1);

@@ -1,7 +1,7 @@
-From e138719113d3db04472f4122913757f05d8475cb Mon Sep 17 00:00:00 2001
+From f45655cd712e7878fc7d679285d94985ca15a73d Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
 Date: Wed, 30 Sep 2026 12:52:59 +0300
-Subject: [PATCH 07/13] Partial reversal of PR c++/64266
+Subject: [PATCH 08/14] Partial reversal of PR c++/64266
 
 ref. ddd0d18c9c07025d578f445dc9a3544020861197
 > Make __PRETTY_FUNCTION__-like functions mergeable string csts (PR c++/64266).

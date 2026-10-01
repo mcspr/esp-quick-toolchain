@@ -1,7 +1,7 @@
-From 6a9afce50f41811e91a32a3e04d77691398316ce Mon Sep 17 00:00:00 2001
+From 9ed24afb932d34d59c5695ffe102a2a0a7c6a6e7 Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
 Date: Wed, 30 Sep 2026 13:19:54 +0300
-Subject: [PATCH 12/13] Move exception strings into flash
+Subject: [PATCH 13/14] Move exception strings into flash
 
 port of the original patch for containers and regex, modified in bulk
 by libstd_flash_string_decls.py

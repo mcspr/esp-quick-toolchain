@@ -1,7 +1,7 @@
 From de3f96e3852b29a69be30cfa0b7d3f99d6d48305 Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
 Date: Mon, 28 Apr 2025 13:39:25 +0300
-Subject: [PATCH 04/13] Version bump for WIP: -mforce-l32
+Subject: [PATCH 04/14] Version bump for WIP: -mforce-l32
 
 Rebased from
 https://github.com/jcmvbkbc/gcc-xtensa/compare/xtensa-force-l32-12.1

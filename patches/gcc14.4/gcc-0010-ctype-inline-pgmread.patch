@@ -1,7 +1,7 @@
-From 650b73abcccc23e3e2b3f3b3327e037e76b4d42f Mon Sep 17 00:00:00 2001
+From de97add171e86ab3e70cdef5fda1461b12facd3c Mon Sep 17 00:00:00 2001
 From: earlephilhower/esp-quick-toolchain <woot>
 Date: Sat, 26 Sep 2026 14:45:18 +0300
-Subject: [PATCH 09/13] ctype inline pgmread
+Subject: [PATCH 10/14] ctype inline pgmread
 
 ---
  libstdc++-v3/config/os/newlib/ctype_inline.h | 24 ++++++++++++++++++--

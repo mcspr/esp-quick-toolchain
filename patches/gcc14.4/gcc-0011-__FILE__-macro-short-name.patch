@@ -1,7 +1,7 @@
-From b641f72e8111149bd1e4d51c907880de4a9dd702 Mon Sep 17 00:00:00 2001
+From 3d115f64bb5164fe4cc62adb735d34ec53a36f4f Mon Sep 17 00:00:00 2001
 From: earlephilhower/esp-quick-toolchain <woot>
 Date: Sat, 26 Sep 2026 14:46:19 +0300
-Subject: [PATCH 10/13] __FILE__ macro short name
+Subject: [PATCH 11/14] __FILE__ macro short name
 
 ---
  libcpp/macro.cc | 3 +--
