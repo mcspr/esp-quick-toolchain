@@ -1,7 +1,7 @@
-From 83a19aaaadcfad38fc1fd522aa293cddcf72ac3c Mon Sep 17 00:00:00 2001
+From 28a81d104070a8573ab79ce55b7c968d5cc56cbb Mon Sep 17 00:00:00 2001
 From: Jason Merrill <jason@redhat.com>
 Date: Fri, 4 Apr 2025 23:27:50 -0400
-Subject: [PATCH 07/12] c++: add assert to cp_make_fname_decl
+Subject: [PATCH 08/13] c++: add assert to cp_make_fname_decl
 
 In the PR118629 testcase, pushdecl_outermost_localscope was failing and
 returning error_mark_node without ever actually giving an error; in addition

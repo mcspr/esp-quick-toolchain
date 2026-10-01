@@ -1,7 +1,7 @@
-From 002b02f91dfe8cbc183fe0bd6da93c276f445068 Mon Sep 17 00:00:00 2001
+From de3f96e3852b29a69be30cfa0b7d3f99d6d48305 Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
 Date: Mon, 28 Apr 2025 13:39:25 +0300
-Subject: [PATCH 03/12] Version bump for WIP: -mforce-l32
+Subject: [PATCH 04/13] Version bump for WIP: -mforce-l32
 
 Rebased from
 https://github.com/jcmvbkbc/gcc-xtensa/compare/xtensa-force-l32-12.1
@@ -34,10 +34,10 @@ index d855fb8d605..b812222c381 100644
 + (and (match_code "mem")
 +      (match_test "TARGET_FORCE_L32 && !constantpool_mem_p (op)")))
 diff --git a/gcc/config/xtensa/xtensa.cc b/gcc/config/xtensa/xtensa.cc
-index 2d6cf9bd18b..2e383012107 100644
+index 590715fb605..4e3be3c39da 100644
 --- a/gcc/config/xtensa/xtensa.cc
 +++ b/gcc/config/xtensa/xtensa.cc
-@@ -2341,7 +2341,8 @@ xtensa_legitimate_address_p (machine_mode mode, rtx addr, bool strict,
+@@ -2344,7 +2344,8 @@ xtensa_legitimate_address_p (machine_mode mode, rtx addr, bool strict,
      return true;
  
    /* Check for "register + offset" addressing.  */
@@ -47,7 +47,7 @@ index 2d6cf9bd18b..2e383012107 100644
      {
        rtx xplus0 = XEXP (addr, 0);
        rtx xplus1 = XEXP (addr, 1);
-@@ -3002,6 +3003,8 @@ printx (FILE *file, signed int val)
+@@ -3005,6 +3006,8 @@ printx (FILE *file, signed int val)
      fprintf (file, "0x%x", val);
  }
  
@@ -56,7 +56,7 @@ index 2d6cf9bd18b..2e383012107 100644
  
  void
  print_operand (FILE *file, rtx x, int letter)
-@@ -3011,6 +3014,13 @@ print_operand (FILE *file, rtx x, int letter)
+@@ -3014,6 +3017,13 @@ print_operand (FILE *file, rtx x, int letter)
  
    switch (letter)
      {
@@ -70,7 +70,7 @@ index 2d6cf9bd18b..2e383012107 100644
      case 'D':
        if (GET_CODE (x) == REG || GET_CODE (x) == SUBREG)
  	fprintf (file, "%s", reg_names[xt_true_regnum (x) + 1]);
-@@ -3149,6 +3159,47 @@ print_operand (FILE *file, rtx x, int letter)
+@@ -3152,6 +3162,47 @@ print_operand (FILE *file, rtx x, int letter)
      }
  }
  

@@ -1,7 +1,7 @@
-From 12aff79c2b6726aff7181756d75e381602e3dbe6 Mon Sep 17 00:00:00 2001
+From 728da39002c8a42b1f7383e40062806d2fdb99f1 Mon Sep 17 00:00:00 2001
 From: earlephilhower/esp-quick-toolchain <woot>
 Date: Sat, 26 Sep 2026 14:47:20 +0300
-Subject: [PATCH 10/12] int32_t is int instead of long int
+Subject: [PATCH 11/13] int32_t is int instead of long int
 
 ---
  gcc/config/xtensa/xtensa.h | 5 +++++

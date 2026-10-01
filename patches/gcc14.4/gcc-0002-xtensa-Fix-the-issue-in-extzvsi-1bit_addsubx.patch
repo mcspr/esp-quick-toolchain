@@ -1,7 +1,7 @@
 From 2892feecb9af21d6d7d429ed8b2c6b942e86f458 Mon Sep 17 00:00:00 2001
 From: Takayuki 'January June' Suwa <jjsuwa_sys3175@yahoo.co.jp>
 Date: Sun, 10 Nov 2024 15:39:22 +0900
-Subject: [PATCH 02/12] xtensa: Fix the issue in "*extzvsi-1bit_addsubx"
+Subject: [PATCH 02/13] xtensa: Fix the issue in "*extzvsi-1bit_addsubx"
 
 The second source register of insn "*extzvsi-1bit_addsubx" cannot be the
 same as the destination register, because that register will be overwritten
