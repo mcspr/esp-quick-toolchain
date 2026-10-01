@@ -202,7 +202,7 @@ CLOOG_VER := 0.18.1
 CLOOG_URL := https://gcc.gnu.org/pub/gcc/infrastructure/cloog-$(CLOOG_VER).tar.gz
 
 # libexpat release tagging works a bit weird
-LIBEXPAT_VER := 2.7.1
+LIBEXPAT_VER := 2.8.5
 LIBEXPAT_REV := R_$(subst .,_,$(LIBEXPAT_VER))
 LIBEXPAT_URL := https://github.com/libexpat/libexpat/releases/download/$(LIBEXPAT_REV)/expat-$(LIBEXPAT_VER).tar.bz2
 
@@ -840,7 +840,7 @@ endif
 	mkdir $(call arena,$@)/libexpat $(call log,$@)
 	(cd $(call arena,$@)/libexpat; \
 		$(call setenv,$@); \
-		cp -r $(REPODIR)/libexpat-$(LIBEXPAT_VER)/* ./ ; \
+		cp -r $(REPODIR)/expat-$(LIBEXPAT_VER)/* ./ ; \
 		bash buildconf.sh ;\
 		./configure $(call configure,$@) \
 			$(CONFIGURE_LIBEXPAT) \
