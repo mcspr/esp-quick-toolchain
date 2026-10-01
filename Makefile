@@ -207,7 +207,7 @@ LIBEXPAT_REV := R_$(subst .,_,$(LIBEXPAT_VER))
 LIBEXPAT_URL := https://github.com/libexpat/libexpat/releases/download/$(LIBEXPAT_REV)/expat-$(LIBEXPAT_VER).tar.bz2
 
 # ncurses releases are sometimes just periodic snapshots
-NCURSES_VER := 8d252361ceeb3db4f8dec861e0fb414352e88b13
+NCURSES_VER := 41553966d3ac468f9fff0b63f98841aefb0cb04e
 NCURSES_URL := https://github.com/ThomasDickey/ncurses-snapshots/archive/$(NCURSES_VER).zip
 
 URLS := \
@@ -422,25 +422,21 @@ configure_with_isl = \
 #
 # --enable-termcap
 #   fallback support so we don't depend on tinfo database
+#   note that this *must* read existing database from somewhere, either host or cross that was previously built w/o fallbacks
 #
 CONFIGURE_NCURSES := \
-	--disable-database \
-	--disable-db-install \
 	--disable-home-terminfo \
 	--disable-overwrite \
 	--disable-widec \
 	--enable-pc-files \
 	--enable-symlinks \
-	--enable-termcap \
 	--with-build-cppflags=-D_GNU_SOURCE \
-	--with-fallbacks=xterm,xterm-256color,screen-256color,linux,vt100 \
 	--with-normal \
 	--without-ada \
 	--without-big-core \
 	--without-debug \
 	--without-manpages \
 	--without-profile \
-	--without-progs \
 	--without-shared \
 	--without-tack \
 	--without-termlib \
@@ -852,11 +848,27 @@ endif
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/ncurses $(call log_stage,$@)
 	mkdir $(call arena,$@)/ncurses $(call log,$@)
+	# initialize local ncurses install w/o the limited featureset first
 	(cd $(call arena,$@)/ncurses ; \
 		$(call setenv,$@); \
 		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure \
 			$(call configure_ncurses,$@) \
-			--prefix=$(call arena,$@)/cross \
+				--with-progs \
+				--without-fallbacks \
+				--prefix=$(call arena,$@)/cross \
+		&& $(MAKE) \
+		&& $(MAKE) install) $(call log,$@)
+	# regenerate static libraries w/ the new options
+	(cd $(call arena,$@)/ncurses ; \
+		$(call setenv,$@); \
+		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure \
+			$(call configure_ncurses,$@) \
+				--enable-termcap \
+				--without-progs \
+				--disable-database \
+				--disable-db-install \
+				--with-fallbacks=xterm,xterm-256color,screen-256color,linux,vt100 \
+				--prefix=$(call arena,$@)/cross \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
 	touch $@
