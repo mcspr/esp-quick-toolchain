@@ -1,13 +1,13 @@
-From d7dd9aaa7d982e2b3c3d7b1e9c4cadfe3e22ab58 Mon Sep 17 00:00:00 2001
+From 002b02f91dfe8cbc183fe0bd6da93c276f445068 Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
-Date: Mon, 28 Apr 2025 10:39:25 +0000
-Subject: [PATCH 1/3] Version bump for WIP: -mforce-l32
+Date: Mon, 28 Apr 2025 13:39:25 +0300
+Subject: [PATCH 03/12] Version bump for WIP: -mforce-l32
 
 Rebased from
 https://github.com/jcmvbkbc/gcc-xtensa/compare/xtensa-force-l32-12.1
 https://github.com/jcmvbkbc/gcc-xtensa/commit/ab117bd279248aca6de8a590b3d433d50a0be9be
 
-For the releases/gcc-14.2.0
+For the releases/gcc-14.4.0
 ---
  gcc/config/xtensa/constraints.md | 10 ++++++
  gcc/config/xtensa/xtensa.cc      | 53 +++++++++++++++++++++++++++++++-
@@ -34,10 +34,10 @@ index d855fb8d605..b812222c381 100644
 + (and (match_code "mem")
 +      (match_test "TARGET_FORCE_L32 && !constantpool_mem_p (op)")))
 diff --git a/gcc/config/xtensa/xtensa.cc b/gcc/config/xtensa/xtensa.cc
-index 9beac932467..88cafff2e84 100644
+index 2d6cf9bd18b..2e383012107 100644
 --- a/gcc/config/xtensa/xtensa.cc
 +++ b/gcc/config/xtensa/xtensa.cc
-@@ -2338,7 +2338,8 @@ xtensa_legitimate_address_p (machine_mode mode, rtx addr, bool strict,
+@@ -2341,7 +2341,8 @@ xtensa_legitimate_address_p (machine_mode mode, rtx addr, bool strict,
      return true;
  
    /* Check for "register + offset" addressing.  */
@@ -47,7 +47,7 @@ index 9beac932467..88cafff2e84 100644
      {
        rtx xplus0 = XEXP (addr, 0);
        rtx xplus1 = XEXP (addr, 1);
-@@ -2999,6 +3000,8 @@ printx (FILE *file, signed int val)
+@@ -3002,6 +3003,8 @@ printx (FILE *file, signed int val)
      fprintf (file, "0x%x", val);
  }
  
@@ -56,7 +56,7 @@ index 9beac932467..88cafff2e84 100644
  
  void
  print_operand (FILE *file, rtx x, int letter)
-@@ -3008,6 +3011,13 @@ print_operand (FILE *file, rtx x, int letter)
+@@ -3011,6 +3014,13 @@ print_operand (FILE *file, rtx x, int letter)
  
    switch (letter)
      {
@@ -70,7 +70,7 @@ index 9beac932467..88cafff2e84 100644
      case 'D':
        if (GET_CODE (x) == REG || GET_CODE (x) == SUBREG)
  	fprintf (file, "%s", reg_names[xt_true_regnum (x) + 1]);
-@@ -3146,6 +3156,47 @@ print_operand (FILE *file, rtx x, int letter)
+@@ -3149,6 +3159,47 @@ print_operand (FILE *file, rtx x, int letter)
      }
  }
  
@@ -119,7 +119,7 @@ index 9beac932467..88cafff2e84 100644
  /* A C compound statement to output to stdio stream STREAM the
     assembler syntax for an instruction operand that is a memory
 diff --git a/gcc/config/xtensa/xtensa.md b/gcc/config/xtensa/xtensa.md
-index fbe40ec671a..82125dd93d7 100644
+index ff3ae385909..aaf5a530178 100644
 --- a/gcc/config/xtensa/xtensa.md
 +++ b/gcc/config/xtensa/xtensa.md
 @@ -944,26 +944,28 @@
@@ -252,5 +252,5 @@ index b653e99d189..df4e7779320 100644
  int xtensa_windowed_abi = -1
  
 -- 
-2.49.0
+2.55.0
 
