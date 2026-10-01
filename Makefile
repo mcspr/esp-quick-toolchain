@@ -32,7 +32,7 @@ endif
 
 # Depending on the GCC version get proper branch and support libs
 ifeq ($(GCC), 4.8)
-    ISL           := 0.12.2
+    ISL_VER       := 0.12.2
     GCC_BRANCH    := call0-4.8.2
     GCC_PKGREL    := 40802
     GCC_REPO      := https://github.com/$(GHUSER)/gcc-xtensa.git
@@ -41,7 +41,7 @@ ifeq ($(GCC), 4.8)
     BINUTILS_REPO := https://github.com/$(GHUSER)/binutils-gdb-xtensa.git
     BINUTILS_DIR  := binutils-gdb
 else ifeq ($(GCC), 4.9)
-    ISL           := 0.12.2
+    ISL_VER       := 0.12.2
     GCC_BRANCH    := call0-4.9.2
     GCC_PKGREL    := 40902
     GCC_REPO      := https://github.com/$(GHUSER)/gcc-xtensa.git
@@ -50,7 +50,7 @@ else ifeq ($(GCC), 4.9)
     BINUTILS_REPO := https://github.com/$(GHUSER)/binutils-gdb-xtensa.git
     BINUTILS_DIR  := binutils-gdb
 else ifeq ($(GCC), 5.2)
-    ISL           := 0.12.2
+    ISL_VER       := 0.12.2
     GCC_BRANCH    := xtensa-ctng-esp-5.2.0
     GCC_PKGREL    := 50200
     GCC_REPO      := https://github.com/$(GHUSER)/gcc-xtensa.git
@@ -59,7 +59,7 @@ else ifeq ($(GCC), 5.2)
     BINUTILS_REPO := https://github.com/$(GHUSER)/binutils-gdb-xtensa.git
     BINUTILS_DIR  := binutils-gdb
 else ifeq ($(GCC), 7.2)
-    ISL           := 0.16.1
+    ISL_VER       := 0.16.1
     GCC_BRANCH    := xtensa-ctng-7.2.0
     GCC_PKGREL    := 70200
     GCC_REPO      := https://github.com/$(GHUSER)/gcc-xtensa.git
@@ -68,7 +68,7 @@ else ifeq ($(GCC), 7.2)
     BINUTILS_REPO := https://github.com/$(GHUSER)/binutils-gdb-xtensa.git
     BINUTILS_DIR  := binutils-gdb
 else ifeq ($(GCC), 9.1)
-    ISL           := 0.18
+    ISL_VER       := 0.18
     GCC_BRANCH    := gcc-9_1_0-release
     GCC_PKGREL    := 90100
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
@@ -77,7 +77,7 @@ else ifeq ($(GCC), 9.1)
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 9.2)
-    ISL           := 0.18
+    ISL_VER       := 0.18
     GCC_BRANCH    := gcc-9_2_0-release
     GCC_PKGREL    := 90200
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
@@ -86,7 +86,7 @@ else ifeq ($(GCC), 9.2)
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 9.3)
-    ISL           := 0.18
+    ISL_VER       := 0.18
     GCC_BRANCH    := releases/gcc-9.3.0
     GCC_PKGREL    := 90300
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
@@ -95,7 +95,7 @@ else ifeq ($(GCC), 9.3)
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 10.1)
-    ISL           := 0.18
+    ISL_VER       := 0.18
     GCC_BRANCH    := releases/gcc-10.1.0
     GCC_PKGREL    := 100100
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
@@ -104,7 +104,7 @@ else ifeq ($(GCC), 10.1)
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 10.2)
-    ISL           := 0.18
+    ISL_VER       := 0.18
     GCC_BRANCH    := releases/gcc-10.2.0
     GCC_PKGREL    := 100200
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
@@ -113,7 +113,7 @@ else ifeq ($(GCC), 10.2)
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 10.3)
-    ISL           := 0.18
+    ISL_VER       := 0.18
     GCC_BRANCH    := releases/gcc-10.3.0
     GCC_PKGREL    := 100300
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
@@ -122,7 +122,7 @@ else ifeq ($(GCC), 10.3)
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 11.1)
-    ISL           := 0.18
+    ISL_VER       := 0.18
     GCC_BRANCH    := releases/gcc-11.1.0
     GCC_PKGREL    := 110100
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
@@ -131,7 +131,7 @@ else ifeq ($(GCC), 11.1)
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 14.4)
-    ISL           := 0.18
+    ISL_VER       := 0.24
     GCC_BRANCH    := releases/gcc-14.4.0
     GCC_PKGREL    := 140400
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
@@ -190,7 +190,7 @@ LIBELF_VER := 0.8.13
 LIBELF_BLOB := $(PWD)/blobs/libelf-$(LIBELF_VER).tar.gz
 
 # GNU GDB & the rest of external dependencies which are used for binutils and gcc builds
-ISL_URL := https://gcc.gnu.org/pub/gcc/infrastructure/isl-$(ISL).tar.bz2
+ISL_URL := https://gcc.gnu.org/pub/gcc/infrastructure/isl-$(ISL_VER).tar.bz2
 
 GMP_VER := 6.3.0
 GMP_URL := https://gcc.gnu.org/pub/gcc/infrastructure/gmp-$(GMP_VER).tar.bz2
@@ -832,7 +832,7 @@ endif
 	mkdir $(call arena,$@)/isl $(call log,$@)
 	(cd $(call arena,$@)/isl ; \
 		$(call setenv,$@); \
-		$(REPODIR)/isl-$(ISL)/configure \
+		$(REPODIR)/isl-$(ISL_VER)/configure \
 			$(call configure,$@) \
 			$(call configure_with_gmp,$@) \
 			--target=$(call host,$@) \
