@@ -185,10 +185,6 @@ esptool_BRANCH := f80ae31d3b99eee41bd6a7fe6fdf4f889c1dc59b
 
 # external dependencies fetched as release blobs
 
-# vendored libelf kept within repo
-LIBELF_VER := 0.8.13
-LIBELF_BLOB := $(PWD)/blobs/libelf-$(LIBELF_VER).tar.gz
-
 # GNU GDB & the rest of external dependencies which are used for binutils and gcc builds
 ISL_URL := https://gcc.gnu.org/pub/gcc/infrastructure/isl-$(ISL_VER).tar.bz2
 
@@ -699,9 +695,6 @@ CHECKOUT_REPOS = $(patsubst %,.git.%.checkout,$(REPOS))
 				(*) echo " ERROR Unknown archive type $${ext}" ; exit 1 ;; \
 			esac && echo " BLOB $${archive}") ; \
 	done) $(call log_stage,$@)
-	(cd $(REPODIR) \
-		&& tar xf $(LIBELF_BLOB) \
-		&& echo " BLOB libelf-$(LIBELF_BLOB)" ) $(call log_stage,$@)
 
 .stage.blobs: .stage.fetch .git.gcc.checkout | $(REPODIR)
 
@@ -717,10 +710,6 @@ patch = \
 			$(call patch,$$p); \
 		done ) $(call log_stage,$@)
 	# external dependencies could be built as part of the tree
-	(cd $(REPODIR)/$(gcc_DIR) \
-		&& rm -rf libelf \
-		&& ln -sf ../libelf-$(LIBELF_VER) libelf \
-		&& echo " LINK $(gcc_DIR)/libelf <- libelf-$(LIBELF_VER)" ) $(call log,$@)
 ifeq ($(GCC_MAJOR), 4)
 	(cd $(REPODIR)/$(gcc_DIR) \
 		&& rm -rf cloog \
