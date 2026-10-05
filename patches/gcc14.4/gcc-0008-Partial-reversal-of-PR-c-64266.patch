@@ -1,4 +1,4 @@
-From f45655cd712e7878fc7d679285d94985ca15a73d Mon Sep 17 00:00:00 2001
+From 1a319a198207cce54b7338df9b3acc54c9a0ba42 Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
 Date: Wed, 30 Sep 2026 12:52:59 +0300
 Subject: [PATCH 08/14] Partial reversal of PR c++/64266

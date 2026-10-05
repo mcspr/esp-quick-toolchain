@@ -1,4 +1,4 @@
-From 9680d99e59ddf7196070ed0767b6dff0caff769e Mon Sep 17 00:00:00 2001
+From 9e7fc6cf536e7388cc32fae950604233752f7c86 Mon Sep 17 00:00:00 2001
 From: Jason Merrill <jason@redhat.com>
 Date: Fri, 4 Apr 2025 23:27:50 -0400
 Subject: [PATCH 09/14] c++: add assert to cp_make_fname_decl

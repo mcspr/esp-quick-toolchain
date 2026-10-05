@@ -1,4 +1,4 @@
-From aaebb31763392ecda4a7e7391d13741d9361112f Mon Sep 17 00:00:00 2001
+From 209ad76fba2cb87455582fe6043ef0a367923e58 Mon Sep 17 00:00:00 2001
 From: Maxim Prokhorov <prokhorov.max@outlook.com>
 Date: Sun, 27 Sep 2026 15:39:45 +0300
 Subject: [PATCH 14/14] Build & Install include/__eqt

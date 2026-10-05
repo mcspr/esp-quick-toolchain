@@ -1,4 +1,4 @@
-From 4caf86d125fdf79c03fc62ae90208254c0cc135a Mon Sep 17 00:00:00 2001
+From ea5679a8f57fe0eb6f8160b07aa50fa6e21e5ff5 Mon Sep 17 00:00:00 2001
 From: earlephilhower/esp-quick-toolchain <woot>
 Date: Sat, 26 Sep 2026 14:47:20 +0300
 Subject: [PATCH 12/14] int32_t is int instead of long int

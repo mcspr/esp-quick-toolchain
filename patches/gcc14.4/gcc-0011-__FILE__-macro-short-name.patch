@@ -1,4 +1,4 @@
-From 3d115f64bb5164fe4cc62adb735d34ec53a36f4f Mon Sep 17 00:00:00 2001
+From 826ab478201bbb5afe851bc88ab4ce90064e2596 Mon Sep 17 00:00:00 2001
 From: earlephilhower/esp-quick-toolchain <woot>
 Date: Sat, 26 Sep 2026 14:46:19 +0300
 Subject: [PATCH 11/14] __FILE__ macro short name
