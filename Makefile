@@ -1,3 +1,6 @@
+# Omit default rule to rebuild itself
+.PHONY: Makefile
+
 # DO NOT hide make output w/ NOSILENT=1
 ifneq ($(NOSILENT),1)
 .SILENT:
