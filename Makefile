@@ -680,13 +680,15 @@ define newline
 endef
 
 define make_done_recipe
-	$(MAKE) $(if $(NOLOG),NOLOG=$(NOLOG),) $(if $(NOSILENT),NOSILENT=$(NOSILENT),) $(if $(NOCLEAN),NOCLEAN=$(NOCLEAN),) .stage.$(1).done$(newline)
+	$(MAKE) .stage.$(1).done$(newline)
 endef
 
 BUILD_TARGETS_WITHOUT_LINUX := $(filter-out LINUX,$(BUILD_TARGETS))
 
 all:
 	echo STAGE: $@
+	$(MAKE) $(patsubst %,.clean.%.cross,$(BUILD_TARGETS))
+	$(MAKE) .stage.patch
 	$(call make_done_recipe,LINUX)
 	$(foreach target,$(BUILD_TARGETS_WITHOUT_LINUX),$(call make_done_recipe,$(target)))
 	echo All complete
@@ -694,7 +696,10 @@ all:
 define make_phony_first_recipe
 
 .PHONY: $(1)
+
 $(1):
+	$(MAKE) .stage.patch
+	$(MAKE) .clean.$(1).cross .clean.LINUX.cross
 	$(call make_done_recipe,$(1))
 
 endef
@@ -703,6 +708,8 @@ define make_phony_other_recipe
 
 .PHONY: $(1)
 $(1):
+	$(MAKE) .stage.patch
+	$(MAKE) .clean.$(1).cross .clean.LINUX.cross
 	$(call make_done_recipe,LINUX)
 	$(call make_done_recipe,$(1))
 
@@ -870,20 +877,21 @@ $(OVERLAY_CORE_ISA_H): $(LX106_HAL_CORE_ISA_H)
 .stage.%.patch: .git.%.checkout
 	echo STAGE: $@
 
-# Apply all patches
+ifneq ($(NOCLEAN),1)
+# Fetch, checkout all git repositories and apply all patches
 PATCH_REPOS = $(patsubst %,.stage.%.patch,$(REPOS))
 .stage.patch: $(PATCH_REPOS) .stage.blobs .stage.checkout
+else
+# DO NOT clear git repos w/ NOCLEAN=1
+.stage.patch:
+endif
 	echo STAGE: $@
 
+# DO NOT clear existing cross tree w/ NOCLEAN=1
 .clean.%.cross:
 	echo STAGE: $@
-	rm -rf $(call arena,$@)/cross
-
-# DO NOT clear downloads & patch w/ NOCLEAN=1
 ifneq ($(NOCLEAN),1)
-BUILD_START = .clean.%.cross .stage.patch
-else
-BUILD_START =
+	rm -rf $(call arena,$@)/cross
 endif
 
 # Shared dependency for binutils and gcc
