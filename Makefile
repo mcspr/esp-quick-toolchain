@@ -289,10 +289,14 @@ MACOSX86_ASYS   := darwin_x86_64
 #    also disabled in pico toolchain, which uses the same osxcross dist
 # 2. macOS cross tools have to be explicitly stated when configuring build env
 #    host & target arch autodetection does not work for some reason and uses local gcc instead
+MACOSX86_CC := $(MACOSX86_HOST)-cc
+MACOSX86_CXX := $(MACOSX86_HOST)-c++
+MACOSX86_STRIP := $(MACOSX86_HOST)-strip
+
 MACOSX86_CONFIGURE_FLAGS := \
 	--disable-lto \
-	CC=$(MACOSX86_HOST)-cc \
-	CXX=$(MACOSX86_HOST)-c++
+	CC=$(MACOSX86_CC) \
+	CXX=$(MACOSX86_CXX)
 
 MACOSARM_HOST   := aarch64-apple-darwin20.4
 MACOSARM_AHOST  := arm64-apple-darwin
@@ -306,11 +310,15 @@ MACOSARM_ASYS   := darwin_arm64
 
 # 3. strip cannot happen
 # > aarch64-apple-darwin20.4-strip: warning: changes being made to the file will invalidate the code signature in ...
+MACOSARM_CC := $(MACOSARM_HOST)-cc
+MACOSARM_CXX := $(MACOSARM_HOST)-c++
+MACOSARM_STRIP := touch
+
 MACOSARM_CONFIGURE_FLAGS := \
 	--disable-lto \
-	CC=$(MACOSARM_HOST)-cc \
-	CXX=$(MACOSARM_HOST)-c++ \
-	STRIP=touch
+	CC=$(MACOSARM_CC) \
+	CXX=$(MACOSARM_CXX) \
+	STRIP=$(MACOSARM_STRIP)
 
 ARM64_HOST   := aarch64-linux-gnu
 ARM64_AHOST  := aarch64-linux-gnu
@@ -388,12 +396,20 @@ CONFIGURE := \
 
 DUMPMACHINE := $(shell gcc -dumpmachine)
 configure = \
-	--prefix=$(call install,$(1)) \
 	--build=$(DUMPMACHINE) \
 	--host=$(call host,$(1)) \
-	--target=$(TARGET_ARCH) \
 	$(CONFIGURE) \
 	$(call configure_flags,$(1))
+
+configure_cross = \
+	--target=$(call host,$(1)) \
+	--prefix=$(call arena,$(1))/cross \
+	$(call configure,$(1))
+
+configure_target = \
+	--target=$(TARGET_ARCH) \
+	--prefix=$(call install,$(1)) \
+	$(call configure,$(1))
 
 # previously applied through patches/gcc$(GCC)/gcc-eh-alloc.patch
 ifeq ($(GCC), 14.4)
@@ -414,10 +430,6 @@ configure_with_gmp = \
 configure_with_isl = \
 	--with-isl=$(call arena,$(1))/cross
 
-# --disable-widec
-#   enabled by default since ncurses-6.5, but target does not really need wide chars
-#   (todo: possibly even attempt to disable wide chars everywhere else)
-#
 # --without-termlib
 #   merge tinfo.a and ncurses.a, since there is no pkgconfig to hint the linker about the 2nd one,
 #   binutils would break when attempting to test it w/o linking *both* tinfo.a and ncurses.a
@@ -427,12 +439,18 @@ configure_with_isl = \
 #   fallback support so we don't depend on tinfo database
 #   note that this *must* read existing database from somewhere, either host or cross that was previously built w/o fallbacks
 #
+# --enable-widec
+#   enabled by default since ncurses-6.5, ensure existing database files *could* be
+#   converted into fallback (verify arena*/ncurses/ncurses/fallback.c after build)
+#   currently, this only affects xterm* terminfos
+#
 CONFIGURE_NCURSES := \
 	--disable-home-terminfo \
 	--disable-overwrite \
-	--disable-widec \
+	--disable-stripping \
 	--enable-pc-files \
 	--enable-symlinks \
+	--enable-widec \
 	--with-build-cppflags=-D_GNU_SOURCE \
 	--with-normal \
 	--without-ada \
@@ -448,9 +466,27 @@ CONFIGURE_NCURSES := \
 NCURSES_CONFIGURE_FLAGS =
 
 configure_ncurses = \
-	$(call configure,$(1)) \
+	$(call configure_cross,$(1)) \
 	$(CONFIGURE_NCURSES) \
 	$(NCURSES_CONFIGURE_FLAGS)
+
+# initialize ncurses for host so database & tic could be used later instead of the container one
+NCURSES_CONFIGURE_FLAGS_WITH_PROGS := \
+	--program-prefix="" \
+	--with-fallbacks="" \
+	--without-cxx-binding \
+	--without-form \
+	--without-menu \
+	--without-panel \
+	--with-progs
+
+# generate static libraries fallbacks built in via termcap
+NCURSES_CONFIGURE_FLAGS_WITH_FALLBACKS := \
+	--enable-termcap \
+	--without-progs \
+	--disable-database \
+	--disable-db-install \
+	--with-fallbacks=xterm,xterm-256color,screen-256color,linux,vt100
 
 CONFIGURE_LIBEXPAT := \
 	--without-docbook \
@@ -468,7 +504,7 @@ CONFIGURE_BINUTILS := \
 	--without-python
 
 configure_binutils = \
-	$(call configure,$(1)) \
+	$(call configure_target,$(1)) \
 	$(call configure_with_gmp,$(1)) \
 	$(call configure_with_isl,$(1)) \
 	$(CONFIGURE_BINUTILS)
@@ -498,12 +534,12 @@ CONFIGURE_GDB := \
 GDB_CPPFLAGS := -DNCURSES_STATIC
 
 setenv_gdb = \
-	export CPPFLAGS="$(GDB_CPPFLAGS)"
+	export CPPFLAGS="$(GDB_CPPFLAGS) $${CPPFLAGS}"
 
 GDB_CONFIGURE_FLAGS =
 
 configure_gdb = \
-	$(call configure,$(1)) \
+	$(call configure_target,$(1)) \
 	$(call configure_with_gmp,$(1)) \
 	$(CONFIGURE_GDB) \
 	$(GDB_CONFIGURE_FLAGS)
@@ -545,21 +581,32 @@ CFFT := -mlongcalls $(CFFT_LTO) -Os -g -free -fipa-pta
 # Generic opts passed to both CC and CXX
 SHARED_OPT_FLAGS := -pipe -g -O2
 
-# Sets the environment variables for a subshell while building
 # arenaX/cross used as system root for building host tools
+# linux installation path used as build tools root
+SHARED_PATH_BIN := $(call cross,.stage.LINUX.stage)/bin:$(call install,.stage.LINUX.stage)/bin
+
+# Sets the environment variables for a subshell while building
 # PATH allows both target cross/ tools and host tools built within the context of cross/
 # PKG_CONFIG_... should prevent host system pollution while building & installing packages for cross/
-setenv = \
-	export CFLAGS_FOR_TARGET="$(CFFT)"; \
-	export CXXFLAGS_FOR_TARGET="$(CFFT)"; \
-	export CFLAGS="$(call cflags,$(1)) $(SHARED_OPT_FLAGS)"; \
-	export CXXFLAGS="$(SHARED_OPT_FLAGS)"; \
-	export LDFLAGS="$(call ldflags,$(1))"; \
-	export PATH="$(call cross,$(1))/bin:$(call install,.stage.LINUX.stage)/bin:$${PATH}"; \
-	export PKG_CONFIG_PATH=""; \
-	export PKG_CONFIG_LIBDIR="$(call cross,$(1))/lib/pkgconfig"; \
-	export PKG_CONFIG_SYSROOT_DIR="$(call cross,$(1))/"; \
-	export LD_LIBRARY_PATH="$(call cross,$(1))/lib:$${LD_LIBRARY_PATH}"
+setenv = export \
+	CFLAGS_FOR_TARGET="$(CFFT)" \
+	CXXFLAGS_FOR_TARGET="$(CFFT)" \
+	CFLAGS="$(call cflags,$(1)) $(SHARED_OPT_FLAGS) $${CFLAGS}" \
+	CXXFLAGS="$(SHARED_OPT_FLAGS) $${CXXFLAGS}" \
+	LDFLAGS="$(call ldflags,$(1)) $${LDFLAGS}" \
+	PATH="$(call cross,$(1))/bin:$(SHARED_PATH_BIN):$${PATH}" \
+	PKG_CONFIG_PATH="" \
+	PKG_CONFIG_LIBDIR="$(call cross,$(1))/lib/pkgconfig" \
+	PKG_CONFIG_SYSROOT_DIR="$(call cross,$(1))/" \
+	LD_LIBRARY_PATH="$(call cross,$(1))/lib:$${LD_LIBRARY_PATH}"
+
+# in case host triplet is missing / cannot be discovered, ensure these are exported
+# for some cases, explicit variables are required before and after ./configure
+setenv_cross = export \
+	CC=$(or $($(call arch,$(1))_CC),$(call host,$(1))-gcc) \
+	CXX=$(or $($(call arch,$(1))_CXX),$(call host,$(1))-g++) \
+	STRIP=$(or $($(call arch,$(1))_STRIP),$(call host,$(1))-strip) \
+	&& $(call setenv,$(1))
 
 # Creates a package.json file for PlatformIO
 # Package version **must** conform with Semantic Versioning specicfication:
@@ -608,24 +655,61 @@ linux default: .stage.LINUX.done
 
 .PHONY: .git.% .git.%.%
 
-.PHONY: .stage.patch .stage.blobs .stage.checkout
+.PHONY: .stage.patch .stage.%.patch .stage.blobs .stage.checkout
 
-.PHONY: .stage.%.start
-
-# Build all toolchain versions
-BUILD_DONE = $(patsubst %,.stage.%.done,$(BUILD_TARGETS))
-all: $(BUILD_DONE)
-	echo STAGE: $@
-	echo All complete
-
-$(REPODIR):
-	mkdir -p $@
+# Leave jobserver to the submake calls
+.NOTPARALLEL:
 
 download: .stage.gitclone .stage.blobs
 
-# Other cross-compile cannot start until base toolchain is built
-BUILD_GCC1_MAKE = $(patsubst %,.stage.%.gcc1-make,$(filter-out LINUX,$(BUILD_TARGETS)))
-$(BUILD_GCC1_MAKE): .stage.LINUX.done
+build_done = .stage.$(1).package .stage.$(1).mkspiffs .stage.$(1).mklittlefs .stage.$(1).esptool
+
+define recipe_done
+.stage.$(1).done: $(call build_done,$(1))
+	echo DONE: $$(call arch,$$@)
+	touch $$@
+endef
+
+$(foreach target,$(BUILD_TARGETS),$(eval $(call recipe_done,$(target))))
+
+# Build all toolchain versions
+BUILD_DONE = $(patsubst %,.stage.%.done,$(BUILD_TARGETS))
+
+define newline
+
+endef
+
+define make_done_recipe
+	$(MAKE) $(if $(NOLOG),NOLOG=$(NOLOG),) $(if $(NOSILENT),NOSILENT=$(NOSILENT),) $(if $(NOCLEAN),NOCLEAN=$(NOCLEAN),) .stage.$(1).done$(newline)
+endef
+
+BUILD_TARGETS_WITHOUT_LINUX := $(filter-out LINUX,$(BUILD_TARGETS))
+
+all:
+	echo STAGE: $@
+	$(call make_done_recipe,LINUX)
+	$(foreach target,$(BUILD_TARGETS_WITHOUT_LINUX),$(call make_done_recipe,$(target)))
+	echo All complete
+
+define make_phony_first_recipe
+
+.PHONY: $(1)
+$(1):
+	$(call make_done_recipe,$(1))
+
+endef
+
+define make_phony_other_recipe
+
+.PHONY: $(1)
+$(1):
+	$(call make_done_recipe,LINUX)
+	$(call make_done_recipe,$(1))
+
+endef
+
+$(eval $(call make_phony_first_recipe,LINUX))
+$(eval $(foreach target,$(BUILD_TARGETS_WITHOUT_LINUX),$(call make_phony_other_recipe,$(target))))
 
 # Clean all temporary build and arena directories
 .clean.%.install-and-arena:
@@ -648,8 +732,9 @@ REPOS := gcc binutils newlib lx106-hal mkspiffs mklittlefs esptool
 CLONE_REPOS = $(patsubst %,.git.%.clone,$(REPOS))
 .stage.gitclone: $(CLONE_REPOS)
 
-.git.%.clone: .git.%.reset-and-clean | $(REPODIR)
+.git.%.clone: .git.%.reset-and-clean
 	echo STAGE: $@
+	mkdir -p $(REPODIR)/
 	(test -d $(REPODIR)/$(call gitdir,$*) \
 		|| git clone --recurse-submodules \
 			--branch $(call gitbranch,$*) \
@@ -657,7 +742,7 @@ CLONE_REPOS = $(patsubst %,.git.%.clone,$(REPOS))
 			$(REPODIR)/$(call gitdir,$*) ) $(call log_stage,$@)
 
 # Completely clean out a git directory, removing any untracked files
-.git.%.reset-and-clean: | $(REPODIR)
+.git.%.reset-and-clean:
 	echo STAGE: $@
 	(test -d $(REPODIR)/$(call gitdir,$(*))/.git \
 		&& cd $(REPODIR)/$(call gitdir,$(*)) \
@@ -669,7 +754,7 @@ CLONE_REPOS = $(patsubst %,.git.%.clone,$(REPOS))
 CLEAN_REPOS = $(patsubst %,.git.%.reset-and-clean,$(REPOS))
 .clean.gitclone: $(CLEAN_REPOS)
 
-.git.%.checkout: .git.%.clone | $(REPODIR)
+.git.%.checkout: .git.%.clone
 	echo STAGE: $@
 	(test -d $(REPODIR)/$(call gitdir,$(*))/.git \
 		&& cd $(REPODIR)/$(call gitdir,$*) \
@@ -682,12 +767,13 @@ CHECKOUT_REPOS = $(patsubst %,.git.%.checkout,$(REPOS))
 .stage.checkout: $(CHECKOUT_REPOS)
 
 # Prep fetched urls & local archives
-.stage.fetch: | $(REPODIR)
+.stage.fetch:
 	echo STAGE: $@
+	mkdir -p $(REPODIR)/
 	(for url in $(URLS) ; do \
 	    archive=$${url##*/}; name=$${archive%.t*}; base=$${name%-*}; ext=$${archive##*.} ; \
 		test -r $(REPODIR)/$${archive} || wget -v -O $(REPODIR)/$${archive} $${url} ; \
-		(cd $(REPODIR); \
+		(cd $(REPODIR) && \
 			case "$${ext}" in \
 				(bz2|gz|lz|xz) tar xf $${archive} ;; \
 				(zip) unzip -qu $${archive} ;; \
@@ -695,76 +781,99 @@ CHECKOUT_REPOS = $(patsubst %,.git.%.checkout,$(REPOS))
 			esac && echo " BLOB $${archive}") ; \
 	done) $(call log_stage,$@)
 
-.stage.blobs: .stage.fetch .git.gcc.checkout | $(REPODIR)
+.stage.blobs: .stage.fetch .git.gcc.checkout
 
 # Checkout and reset, then apply patches to the local GIT repos
 patch = \
 	test -r "$(1)" || continue ; \
     (set -x; patch -s -p1 -i $(1))
 
-.stage.gcc.patch: .git.gcc.checkout
+# Dirty-force HAL definition for binutils & gcc
+LX106_HAL_CORE_ISA_H := $(REPODIR)/$(lx106-hal_DIR)/include/xtensa/config/core-isa.h
+LX106_HAL_SYSTEM_H := $(REPODIR)/$(lx106-hal_DIR)/include/xtensa/config/system.h
+LX106_HAL_XTENSA_CONFIG_H := \
+	$(LX106_HAL_CORE_ISA_H) \
+	$(LX106_HAL_SYSTEM_H)
+
+$(LX106_HAL_XTENSA_CONFIG_H): .stage.lx106-hal.patch
+
+OVERLAY_XTENSA_CONFIG_H := $(REPODIR)/xtensa-config.h
+$(OVERLAY_XTENSA_CONFIG_H): $(LX106_HAL_XTENSA_CONFIG_H)
+	test -r "$(OVERLAY_XTENSA_CONFIG_H)" \
+		&& (cat $^ | diff -q $(OVERLAY_XTENSA_CONFIG_H) - || cat $^ > $@) \
+		|| (cat $^ > $@)
+
+.stage.gcc.patch: $(OVERLAY_XTENSA_CONFIG_H) .git.gcc.checkout
 	echo STAGE: $@
-	(cd $(REPODIR)/$(gcc_DIR); \
+	(cd $(REPODIR)/$(gcc_DIR) && \
 		for p in $(PATCHDIR)/gcc-*.patch $(PATCHDIR)/gcc$(GCC)/gcc-*.patch; do \
 			$(call patch,$$p); \
 		done ) $(call log_stage,$@)
-	# external dependencies could be built as part of the tree
+	(cd $(REPODIR)/$(gcc_DIR) \
+		&& cp -v $(OVERLAY_XTENSA_CONFIG_H) include/xtensa-config.h) $(call log,$@)
 ifeq ($(GCC_MAJOR), 4)
+	# external dependency built as part of the tree
 	(cd $(REPODIR)/$(gcc_DIR) \
 		&& rm -rf cloog \
 		&& ln -sf ../cloog-$(CLOOG_VER) cloog \
 		&& echo " LINK $(gcc_DIR)/cloog <- cloog-$(CLOOG_VER)" ) $(call log,$@)
 endif
 
-.stage.binutils.patch: .git.binutils.checkout
+.stage.binutils.patch: $(OVERLAY_XTENSA_CONFIG_H) .git.binutils.checkout
 	echo STAGE: $@
-	(cd $(REPODIR)/$(binutils_DIR); \
+	(cd $(REPODIR)/$(binutils_DIR) && \
 		for p in $(PATCHDIR)/bin-*.patch $(PATCHDIR)/gcc$(GCC)/bin-*.patch; do \
 			$(call patch,$$p); \
 		done ) $(call log_stage,$@)
+	(cd $(REPODIR)/$(binutils_DIR) \
+		&& cp -va $(OVERLAY_XTENSA_CONFIG_H) include/xtensa-config.h) $(call log,$@)
 
-.stage.newlib.patch: .stage.lx106-hal.patch .git.newlib.checkout
+# Recent newlib ships minimal HAL core-isa.h for lx6/lx7 (aka esp32), make sure it is for lx106
+LX106_HAL_CORE_ISA_H := $(REPODIR)/$(lx106-hal_DIR)/include/xtensa/config/core-isa.h
+$(LX106_HAL_CORE_ISA_H): .stage.lx106-hal.patch
+
+NEWLIB_CORE_ISA_H := $(REPODIR)/$(newlib_DIR)/newlib/libc/machine/xtensa/include/xtensa/config/core-isa.h
+OVERLAY_CORE_ISA_H := $(REPODIR)/core-isa.h
+
+$(NEWLIB_CORE_ISA_H): $(OVERLAY_CORE_ISA_H)
+
+$(OVERLAY_CORE_ISA_H): $(LX106_HAL_CORE_ISA_H)
+	test -r "$(OVERLAY_CORE_ISA_H)" \
+		&& (diff -q $< $@ || cp $< $@) \
+		|| (cp $< $@)
+
+.stage.newlib.patch: $(OVERLAY_CORE_ISA_H) .git.newlib.checkout
 	echo STAGE: $@
-	(cd $(REPODIR)/$(newlib_DIR); \
+	(cd $(REPODIR)/$(newlib_DIR) && \
 		for p in $(PATCHDIR)/lib-*.patch $(PATCHDIR)/gcc$(GCC)/lib-*.patch; do \
 			$(call patch,$$p); \
 		done ) $(call log_stage,$@)
-	# Recent newlib ships minimal HAL core-isa.h for lx6/lx7 (aka esp32), make sure it is for lx106
-	(set -x; cp -va $(REPODIR)/$(lx106-hal_DIR)/include/xtensa/config/core-isa.h \
-		$(REPODIR)/$(newlib_DIR)/newlib/libc/machine/xtensa/include/xtensa/config/core-isa.h ) \
-		$(call log,$@)
+	(set -x; cp -va $(OVERLAY_CORE_ISA_H) $(NEWLIB_CORE_ISA_H)) $(call log,$@)
 
 .stage.lx106-hal.patch: .git.lx106-hal.checkout
 	echo STAGE: $@
-	(cd $(REPODIR)/$(lx106-hal_DIR); \
+	(cd $(REPODIR)/$(lx106-hal_DIR) && \
 		for p in $(PATCHDIR)/hal-*.patch; do \
 			$(call patch,$$p); \
 		done ) $(call log_stage,$@)
 	# HAL Makefile.am was patched above
-	(cd $(REPODIR)/$(lx106-hal_DIR); \
-		set -x; autoreconf -i ) $(call log,$@)
+	(cd $(REPODIR)/$(lx106-hal_DIR) \
+		&& autoreconf -i ) $(call log,$@)
 
 .stage.mkspiffs.patch: .git.mkspiffs.checkout
 	echo STAGE: $@
-	(cd $(REPODIR)/$(mkspiffs_DIR); \
+	(cd $(REPODIR)/$(mkspiffs_DIR) && \
 		for p in $(PATCHDIR)/mkspiffs/$(mkspiffs_BRANCH)*.patch; do \
 			$(call patch,$$p); \
 		done ) $(call log_stage,$@)
 
-.stage.%.patch:
+.stage.%.patch: .git.%.checkout
 	echo STAGE: $@
 
 # Apply all patches
 PATCH_REPOS = $(patsubst %,.stage.%.patch,$(REPOS))
 .stage.patch: $(PATCH_REPOS) .stage.blobs .stage.checkout
 	echo STAGE: $@
-	# Dirty-force HAL definition to binutils & gcc
-	for ow in \
-		$(REPODIR)/$(gcc_DIR)/include/xtensa-config.h \
-		$(REPODIR)/$(binutils_DIR)/include/xtensa-config.h; do \
-		( cd $(REPODIR)/$(lx106-hal_DIR)/include/xtensa/config; \
-	      cat core-isa.h system.h ) > $${ow} ; \
-    done $(call log_stage,$@)
 
 .clean.%.cross:
 	echo STAGE: $@
@@ -772,60 +881,53 @@ PATCH_REPOS = $(patsubst %,.stage.%.patch,$(REPOS))
 
 # DO NOT clear downloads & patch w/ NOCLEAN=1
 ifneq ($(NOCLEAN),1)
-.stage.%.start: .clean.%.cross .stage.patch
+BUILD_START = .clean.%.cross .stage.patch
 else
-.stage.%.start:
+BUILD_START =
 endif
-	echo STAGE: $@
-	mkdir -p $(call arena,$@) $(call log_stage,$@)
 
 # Shared dependency for binutils and gcc
-.stage.%.gmp: .stage.%.start
+.stage.%.gmp:
 	echo STAGE: $@
-	(cd $(call arena,$@); \
-        rm -rf gmp-$(GMP_VER) mpfr-$(MPFR_VER) mpc-$(MPC_VER)) $(call log_stage,$@)
-	(cd $(call arena,$@); \
-		mkdir -p gmp-$(GMP_VER) mpfr-$(MPFR_VER) mpc-$(MPC_VER)) $(call log,$@)
-	(cd $(call arena,$@)/gmp-$(GMP_VER); \
-		$(call setenv,$@); \
-		$(REPODIR)/gmp-$(GMP_VER)/configure \
+	rm -rf $(call arena,$@)/gmp-$(GMP_VER) $(call log_stage,$@)
+	mkdir -p $(call arena,$@)/gmp-$(GMP_VER) $(call log,$@)
+	(cd $(call arena,$@)/gmp-$(GMP_VER) \
+		&& $(call setenv,$@) \
+		&& $(REPODIR)/gmp-$(GMP_VER)/configure \
+			$(call configure_cross,$@) \
 			$(GMP_CONFIGURE_FLAGS) \
-			$(call configure,$@) \
-				--target=$(call host,$@) \
-				--prefix=$(call arena,$@)/cross \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
-	(cd $(call arena,$@)/mpfr-$(MPFR_VER); \
-		$(call setenv,$@); \
-		$(REPODIR)/mpfr-$(MPFR_VER)/configure \
-			$(call configure,$@) \
+	rm -rf $(call arena,$@)/mpfr-$(MPFR_VER) $(call log,$@)
+	mkdir -p $(call arena,$@)/mpfr-$(MPFR_VER) $(call log,$@)
+	(cd $(call arena,$@)/mpfr-$(MPFR_VER) \
+		&& $(call setenv,$@) \
+		&& $(REPODIR)/mpfr-$(MPFR_VER)/configure \
+			$(call configure_cross,$@) \
 			$(call configure_with_gmp,$@) \
-			--target=$(call host,$@) \
-			--prefix=$(call arena,$@)/cross \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
-	(cd $(call arena,$@)/mpc-$(MPC_VER); \
-		$(call setenv,$@); \
-		$(REPODIR)/mpc-$(MPC_VER)/configure \
-			$(call configure,$@) \
+	rm -rf $(call arena,$@)/mpc-$(MPC_VER) $(call log,$@)
+	mkdir -p $(call arena,$@)/mpc-$(MPC_VER) $(call log,$@)
+	(cd $(call arena,$@)/mpc-$(MPC_VER) \
+		&& $(call setenv,$@) \
+		&& $(REPODIR)/mpc-$(MPC_VER)/configure \
+			$(call configure_cross,$@) \
 			$(call configure_with_gmp,$@) \
-			--target=$(call host,$@) \
-			--prefix=$(call arena,$@)/cross \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
 	touch $@
 
+# isl-0.xx expects gmp prefix as --with-gmp-prefix=... unlike any other ./configure script here
 .stage.%.isl: .stage.%.gmp
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/isl $(call log_stage,$@)
-	mkdir $(call arena,$@)/isl $(call log,$@)
-	(cd $(call arena,$@)/isl ; \
-		$(call setenv,$@); \
-		$(REPODIR)/isl-$(ISL_VER)/configure \
-			$(call configure,$@) \
-			$(call configure_with_gmp,$@) \
-			--target=$(call host,$@) \
-			--prefix=$(call arena,$@)/cross \
+	mkdir -p $(call arena,$@)/isl $(call log,$@)
+	(cd $(call arena,$@)/isl \
+		&& $(call setenv,$@) \
+		&& $(REPODIR)/isl-$(ISL_VER)/configure \
+			$(call configure_cross,$@) \
+			--with-gmp-prefix=$(call arena,$@)/cross \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
 	touch $@
@@ -834,45 +936,49 @@ endif
 .stage.MACOSARM.gmp .stage.MACOSX86.gmp: GMP_CONFIGURE_FLAGS=--disable-assembly
 
 # GDB static build has to have up-to-date libs
-.stage.%.libexpat: .stage.%.start
+.stage.%.libexpat:
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/libexpat $(call log_stage,$@)
-	mkdir $(call arena,$@)/libexpat $(call log,$@)
-	(cd $(call arena,$@)/libexpat; \
-		$(call setenv,$@); \
-		cp -r $(REPODIR)/expat-$(LIBEXPAT_VER)/* ./ ; \
-		bash buildconf.sh ;\
-		./configure $(call configure,$@) \
+	mkdir -p $(call arena,$@)/libexpat $(call log,$@)
+	(cd $(call arena,$@)/libexpat \
+		&& $(call setenv,$@) \
+		&& cp -r $(REPODIR)/expat-$(LIBEXPAT_VER)/* ./ \
+		&& bash buildconf.sh \
+		&& ./configure \
+			$(call configure_cross,$@) \
 			$(CONFIGURE_LIBEXPAT) \
-			--prefix=$(call arena,$@)/cross ; \
-		$(MAKE) && $(MAKE) install) $(call log,$@)
+		&& $(MAKE) \
+		&& $(MAKE) install ) $(call log,$@)
 	touch $@
 
-.stage.%.ncurses: .stage.%.start
+# only host toolchain cross has to have these
+.stage.%.ncurses-progs:
 	echo STAGE: $@
-	rm -rf $(call arena,$@)/ncurses $(call log_stage,$@)
-	mkdir $(call arena,$@)/ncurses $(call log,$@)
-	# initialize local ncurses install w/o the limited featureset first
-	(cd $(call arena,$@)/ncurses ; \
-		$(call setenv,$@); \
-		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure \
+	touch $@
+
+.stage.LINUX.ncurses-progs:
+	echo STAGE: $@
+	rm -rf $(call arena,$@)/ncurses-progs $(call log_stage,$@)
+	mkdir -p $(call arena,$@)/ncurses-progs $(call log,$@)
+	(cd $(call arena,$@)/ncurses-progs \
+		&& $(call setenv_cross,$@) \
+		&& $(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure \
 			$(call configure_ncurses,$@) \
-				--with-progs \
-				--without-fallbacks \
-				--prefix=$(call arena,$@)/cross \
+			$(NCURSES_CONFIGURE_FLAGS_WITH_PROGS) \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
-	# regenerate static libraries w/ the new options
-	(cd $(call arena,$@)/ncurses ; \
-		$(call setenv,$@); \
-		$(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure \
+	touch $@
+
+# target cross built per arch
+.stage.%.ncurses: .stage.%.ncurses-progs
+	echo STAGE: $@
+	rm -rf $(call arena,$@)/ncurses $(call log_stage,$@)
+	mkdir -p $(call arena,$@)/ncurses $(call log,$@)
+	(cd $(call arena,$@)/ncurses \
+		&& $(call setenv_cross,$@) \
+		&& $(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure \
 			$(call configure_ncurses,$@) \
-				--enable-termcap \
-				--without-progs \
-				--disable-database \
-				--disable-db-install \
-				--with-fallbacks=xterm,xterm-256color,screen-256color,linux,vt100 \
-				--prefix=$(call arena,$@)/cross \
+			$(NCURSES_CONFIGURE_FLAGS_WITH_FALLBACKS) \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
 	touch $@
@@ -893,16 +999,14 @@ BUILD_CROSS = .stage.%.gmp \
 			  .stage.%.libexpat \
 			  .stage.%.ncurses
 
-.NOTPARALLEL: $(BUILD_CROSS)
-
 # Build binutils & gdb
 .stage.%.binutils-config: $(BUILD_CROSS)
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/binutils $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/binutils $(call log,$@)
-	(cd $(call arena,$@)/binutils; \
-		$(call setenv,$@); \
-		$(REPODIR)/$(BINUTILS_DIR)/configure \
+	(cd $(call arena,$@)/binutils \
+		&& $(call setenv,$@) \
+		&& $(REPODIR)/$(BINUTILS_DIR)/configure \
 			$(call configure_binutils,$@) ) $(call log,$@)
 	touch $@
 
@@ -913,50 +1017,51 @@ setenv_binutils = \
 
 .stage.%.binutils-make: .stage.%.binutils-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/binutils; \
-		$(call setenv,$@); \
-		$(call setenv_binutils,$@); \
-		$(MAKE) \
+	(cd $(call arena,$@)/binutils \
+		&& $(call setenv,$@) \
+		&& $(call setenv_binutils,$@) \
+		&& $(MAKE) \
 		&& $(MAKE) install) $(call log_stage,$@)
-	touch $@
 
 # attempt to fix dynamic plugins loader by actually building plugins dynamically
 # https://github.com/msys2/MINGW-packages/issues/7890
 # https://github.com/msys2/MINGW-packages/blob/68f7d4665c396a464536871b1de7b680a47a8fa7/mingw-w64-binutils/PKGBUILD#L150-L151
+WIN32_DLLEXT := .dll
+WIN64_DLLEXT := .dll
+
+dllext = $(or $($(call arch,$(1))_DLLEXT),.so)
+
 .stage.%.binutils-post: .stage.%.binutils-make
-ifeq ($(BINUTILS_BRANCH),master)
-	echo SKIP: $@
-else ifeq ($(BINUTILS_BRANCH),binutils-2_32)
-	echo SKIP: $@
-else
 	echo STAGE: $@
+ifeq ($(BINUTILS_BRANCH),master)
+	touch $@
+else ifeq ($(BINUTILS_BRANCH),binutils-2_32)
+	touch $@
+else
 	rm -rf $(call arena,$@)/binutils/ld $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/binutils/ld $(call log,$@)
-	(cd $(call arena,$@)/binutils/ld; \
-		$(call setenv,$@); \
-		$(REPODIR)/$(BINUTILS_DIR)/ld/configure \
+	(cd $(call arena,$@)/binutils/ld \
+		&& $(call setenv,$@) \
+		&& $(REPODIR)/$(BINUTILS_DIR)/ld/configure \
 			$(call configure_binutils,$@) \
 			--enable-static=no \
 			--enable-shared \
 		&& $(MAKE) \
-		&& cp -v .libs/$(BINUTILS_PLUGINS) $(call install,$@)/lib/bfd-plugins/) $(call log,$@)
-endif
+		&& cp -v .libs/libdep$(call dllext,$@) \
+			$(call install,$@)/lib/bfd-plugins/ ) $(call log,$@)
 	touch $@
+endif
 
-.stage.%.binutils-post: BINUTILS_PLUGINS=libdep.so
-.stage.WIN32.binutils-post .stage.WIN64.binutils-post: BINUTILS_PLUGINS=libdep.dll
-
-.stage.%.gdb-config: .stage.%.binutils-post
+.stage.%.gdb-config: $(BUILD_CROSS)
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/gdb $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/gdb $(call log,$@)
-	(cd $(call arena,$@)/gdb; \
-		$(call setenv,$@); \
-		$(call setenv_gdb,$@); \
-		$(REPODIR)/$(BINUTILS_DIR)/configure \
+	(cd $(call arena,$@)/gdb \
+		&& $(call setenv,$@) \
+		&& $(call setenv_gdb,$@) \
+		&& $(REPODIR)/$(BINUTILS_DIR)/configure \
 			$(call configure_gdb,$@) ) $(call log,$@)
 	touch $@
-
 
 # --disable-source-highlight
 #   ref. https://github.com/crosstool-ng/crosstool-ng/blob/master/scripts/build/debug/300-gdb.sh
@@ -968,11 +1073,11 @@ endif
 
 .stage.%.gdb-make: .stage.%.gdb-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/gdb; \
-		$(call setenv,$@); \
-		$(call setenv_binutils,$@); \
-		$(call setenv_gdb,$@); \
-		$(MAKE) \
+	(cd $(call arena,$@)/gdb \
+		&& $(call setenv,$@) \
+		&& $(call setenv_binutils,$@) \
+		&& $(call setenv_gdb,$@) \
+		&& $(MAKE) \
 		&& $(MAKE) install) $(call log_stage,$@)
 	touch $@
 
@@ -982,36 +1087,38 @@ endif
 .stage.WIN32.binutils-make .stage.WIN32.gdb-make: BINUTILS_LDFLAGS=-static-libgcc -static-libstdc++
 .stage.WIN64.binutils-make .stage.WIN64.gdb-make: BINUTILS_LDFLAGS=-static-libgcc -static-libstdc++
 
-.stage.%.gcc1-config: .stage.%.gdb-make
+.stage.%.gcc1-config: .stage.%.binutils-post .stage.%.gdb-make
 	echo STAGE: $@
-	rm -rf $(call arena,$@)/$(GCC_DIR) $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/$(GCC_DIR) $(call log,$@)
-	(cd $(call arena,$@)/$(GCC_DIR); \
-		$(call setenv,$@); \
-		$(REPODIR)/$(GCC_DIR)/configure \
+	rm -rf $(call arena,$@)/$(gcc_DIR) $(call log_stage,$@)
+	mkdir -p $(call arena,$@)/$(gcc_DIR) $(call log,$@)
+	(cd $(call arena,$@)/$(gcc_DIR) \
+		&& $(call setenv,$@) \
+		&& $(REPODIR)/$(gcc_DIR)/configure \
 			$(CONFIGURE_EH_POOL) \
 			$(call configure_with_gmp,$@) \
 			$(call configure_with_isl,$@) \
-			$(call configure,$@) ) $(call log,$@)
+			$(call configure_target,$@) ) $(call log,$@)
 	touch $@
 
 .stage.%.gcc1-make: .stage.%.gcc1-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/$(GCC_DIR) \
+	(cd $(call arena,$@)/$(gcc_DIR) \
 		&& $(call setenv,$@) \
 		&& $(MAKE) all-gcc \
 		&& $(MAKE) install-gcc) $(call log_stage,$@)
-	(cd $(call install,$@)/bin; \
-		ln -sf $(TARGET_ARCH)-gcc$(call exe,$@) $(TARGET_ARCH)-cc$(call exe,$@)) $(call log,$@)
+	(cd $(call install,$@)/bin \
+		&& ln -sf \
+			$(TARGET_ARCH)-gcc$(call exe,$@) \
+			$(TARGET_ARCH)-cc$(call exe,$@)) $(call log,$@)
 	touch $@
 
 .stage.%.newlib-config: .stage.%.gcc1-make
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/newlib $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/newlib $(call log,$@)
-	(cd $(call arena,$@)/newlib; \
-		$(call setenv,$@); \
-		$(REPODIR)/$(newlib_DIR)/configure \
+	(cd $(call arena,$@)/newlib \
+		&& $(call setenv,$@) \
+		&& $(REPODIR)/$(newlib_DIR)/configure \
 			$(call configure_newlib,$@)) $(call log,$@)
 	touch $@
 
@@ -1019,10 +1126,10 @@ endif
 # even though these don't have to be rebuilt per target, its fairly short and also verifies that the compiler actually works
 .stage.%.newlib-make: .stage.%.newlib-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/newlib; \
-		$(call setenv,$@); $(MAKE)) $(call log_stage,$@)
-	(cd $(call arena,$@)/newlib; \
-		$(call setenv,$@); $(MAKE) install) $(call log,$@)
+	(cd $(call arena,$@)/newlib \
+		&& $(call setenv,$@) \
+		&& $(MAKE) \
+		&& $(MAKE) install ) $(call log_stage,$@)
 	touch $@
 
 .stage.%.hal-config: .stage.%.newlib-make
@@ -1030,10 +1137,10 @@ endif
 	rm -rf $(call arena,$@)/lx106-hal $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/lx106-hal $(call log,$@)
 	# note the CC=... to override possibly injected variable after calling 'configure'
-	(cd $(call arena,$@)/lx106-hal; \
-		$(call setenv,$@); \
-		$(REPODIR)/$(lx106-hal_DIR)/configure \
-			$(call configure,$@) \
+	(cd $(call arena,$@)/lx106-hal \
+		&& $(call setenv,$@) \
+		&& $(REPODIR)/$(lx106-hal_DIR)/configure \
+			$(call configure_target,$@) \
 			CC=$(TARGET_ARCH)-gcc \
 			--target=$(TARGET_ARCH) \
 			--host=$(TARGET_ARCH) ) $(call log,$@)
@@ -1042,9 +1149,9 @@ endif
 # nb. override prefix to ONLY place hal .a into the target arch directory, don't copy to BOTH system-wide and target
 .stage.%.hal-make: .stage.%.hal-config
 	echo STAGE: $@
-	(cd $(call arena,$@)/lx106-hal; \
-		$(call setenv,$@); \
-		$(MAKE) && $(MAKE) \
+	(cd $(call arena,$@)/lx106-hal \
+		&& $(call setenv,$@) \
+		&& $(MAKE) && $(MAKE) \
 			prefix=$(call install,$@)/$(TARGET_ARCH) \
 			exec_prefix=$(call install,$@)/$(TARGET_ARCH) \
 			install ) $(call log_stage,$@)
@@ -1053,40 +1160,35 @@ endif
 .stage.%.libstdcpp: .stage.%.hal-make
 	echo STAGE: $@
 	# stage 2 (build libstdc++)
-	(cd $(call arena,$@)/$(GCC_DIR); \
-		$(call setenv,$@); \
-		$(MAKE) && $(MAKE) install ) $(call log_stage,$@)
+	(cd $(call arena,$@)/$(gcc_DIR) \
+		&& $(call setenv,$@) \
+		&& $(MAKE) && $(MAKE) install ) $(call log_stage,$@)
 	touch $@
 
 .stage.%.libstdcpp-nox: .stage.%.libstdcpp
 	echo STAGE: $@
 	# We copy existing stdc, adjust the makefile, and build a single .a to save much time
-	rm -rf $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox $(call log_stage,$@)
-	(cd $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH); \
-		cp -a libstdc++-v3 libstdc++-v3-nox) $(call log,$@)
-	(cd $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox; \
-		$(call setenv,$@); \
-		$(MAKE) clean; \
-		find . -name Makefile -exec sed -i 's/mlongcalls/mlongcalls -fno-exceptions/' \{\} \; ; \
-		$(MAKE)) $(call log,$@)
-	(cd $(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/; \
-		cp libstdc++.a libstdc++-exc.a; \
-		cp $(call arena,$@)/$(GCC_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a ./) $(call log,$@)
+	rm -rf $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox $(call log_stage,$@)
+	(cd $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH) \
+		&& cp -a libstdc++-v3 libstdc++-v3-nox) $(call log,$@)
+	(cd $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox \
+		&& $(call setenv,$@) \
+		&& $(MAKE) clean \
+		&& find . -name Makefile -exec sed -i 's/mlongcalls/mlongcalls -fno-exceptions/' \{\} \; \
+		&& $(MAKE)) $(call log,$@)
+	(cd $(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/ \
+		&& cp libstdc++.a libstdc++-exc.a \
+		&& cp $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a ./) $(call log,$@)
 	touch $@
 
-.stage.%.strip: .stage.%.libstdcpp .stage.%.libstdcpp-nox
+.stage.%.strip: .stage.%.libstdcpp-nox
 	echo STAGE: $@
-	($(call setenv,$@); \
-		$(call host,$@)-strip \
-		$(call install,$@)/bin/*$(call exe,$@) \
-		$(call install,$@)/lib/bfd-plugins/* \
-		$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/c*$(call exe,$@) \
-		$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/lto1$(call exe,$@) || true ) $(call log_stage,$@)
-	touch $@
-
-# see MACOSARM_CONFIGURE_FLAGS, strip is no-op
-.stage.MACOSARM.strip: .stage.MACOSARM.libstdcpp .stage.MACOSARM.libstdcpp-nox
-	echo STAGE: $@
+	($(call setenv_cross,$@) \
+		&& $$STRIP \
+			$(call install,$@)/bin/*$(call exe,$@) \
+			$(call install,$@)/lib/bfd-plugins/* \
+			$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/c*$(call exe,$@) \
+			$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/lto1$(call exe,$@) ) || true $(call log_stage,$@)
 	touch $@
 
 .stage.%.post: .stage.%.strip
@@ -1101,8 +1203,8 @@ endif
 	rm -rf pkg.$(call arch,$@) $(call log_stage,$@)
 	mkdir -p pkg.$(call arch,$@) $(call log,$@)
 	cp -a $(call install,$@) pkg.$(call arch,$@)/$(TARGET_ARCH) $(call log,$@)
-	(cd pkg.$(call arch,$@)/$(TARGET_ARCH); \
-		$(call make_package_json,toolchain-xtensa,xtensa-gcc,$(call asys,$@)) ) $(call log,$@)
+	(cd pkg.$(call arch,$@)/$(TARGET_ARCH) \
+		&& $(call make_package_json,toolchain-xtensa,xtensa-gcc,$(call asys,$@)) ) $(call log,$@)
 	(tarball=$(call tarball,$@) \
 	    && cd pkg.$(call arch,$@) \
 		&& $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} $(TARGET_ARCH)/ \
@@ -1119,22 +1221,21 @@ endif
 	mkdir -p $(call arena,$@)/mkspiffs $(call log,$@)
 	cp -a $(REPODIR)/$(mkspiffs_DIR) $(call arena,$@)/ $(call log,$@)
 	# Dependencies borked in mkspiffs makefile, so don't use parallel make
-	(cd $(call arena,$@)/$(mkspiffs_DIR);\
-	    $(call setenv,$@); \
-	    $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
-			CC=$(CC) CXX=$(CXX) STRIP=$(STRIP) \
+	(cd $(call arena,$@)/$(mkspiffs_DIR) \
+	    && $(call setenv_cross,$@) \
+	    && $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
 			BUILD_CONFIG_NAME="-arduino-esp8266" \
 			CPPFLAGS="-DSPIFFS_USE_MAGIC_LENGTH=0 -DSPIFFS_ALIGNED_OBJECT_INDEX_TABLES=1" \
             mkspiffs$(call exe,$@)) $(call log,$@)
 	rm -rf pkg.mkspiffs.$(call arch,$@) $(call log,$@)
 	mkdir -p pkg.mkspiffs.$(call arch,$@)/mkspiffs $(call log,$@)
-	(cd pkg.mkspiffs.$(call arch,$@)/mkspiffs; \
-		$(call make_package_json,mkspiffs,mkspiffs-utility,$(call asys,$@)) ) $(call log,$@)
+	(cd pkg.mkspiffs.$(call arch,$@)/mkspiffs \
+		&& $(call make_package_json,mkspiffs,mkspiffs-utility,$(call asys,$@)) ) $(call log,$@)
 	cp $(call arena,$@)/mkspiffs/mkspiffs$(call exe,$@) pkg.mkspiffs.$(call arch,$@)/mkspiffs/. $(call log,$@)
 	(tarball=$(call host,$@).mkspiffs-$$(cd $(REPODIR)/$(mkspiffs_DIR) \
-		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
-	    cd pkg.mkspiffs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mkspiffs; \
-		cd ..; $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) \
+	    && cd pkg.mkspiffs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mkspiffs \
+		&& cd .. && $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
 	rm -rf pkg.mkspiffs.$(call arch,$@) $(call log,$@)
 	touch $@
 
@@ -1144,21 +1245,20 @@ endif
 	mkdir -p $(call arena,$@)/mklittlefs $(call log,$@)
 	cp -a $(REPODIR)/mklittlefs $(call arena,$@)/ $(call log,$@)
 	# Dependencies borked in mklittlefs makefile, so don't use parallel make
-	(cd $(call arena,$@)/mklittlefs;\
-	    $(call setenv,$@); \
-	    $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
-			CC=$(CC) CXX=$(CXX) STRIP=$(STRIP) \
+	(cd $(call arena,$@)/mklittlefs \
+	    && $(call setenv_cross,$@) \
+	    && $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
 			BUILD_CONFIG_NAME="-arduino-esp8266" \
             mklittlefs$(call exe,$@)) $(call log,$@)
 	rm -rf pkg.mklittlefs.$(call arch,$@) $(call log,$@)
 	mkdir -p pkg.mklittlefs.$(call arch,$@)/mklittlefs $(call log,$@)
-	(cd pkg.mklittlefs.$(call arch,$@)/mklittlefs; \
-		$(call make_package_json,mklittlefs,littlefs-utility,$(call asys,$@)) ) $(call log,$@)
+	(cd pkg.mklittlefs.$(call arch,$@)/mklittlefs \
+		&& $(call make_package_json,mklittlefs,littlefs-utility,$(call asys,$@)) ) $(call log,$@)
 	cp $(call arena,$@)/mklittlefs/mklittlefs$(call exe,$@) pkg.mklittlefs.$(call arch,$@)/mklittlefs/. $(call log,$@)
 	(tarball=$(call host,$@).mklittlefs-$$(cd $(REPODIR)/mklittlefs \
-		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
-	    cd pkg.mklittlefs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mklittlefs; \
-		cd ..; $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) \
+	    && cd pkg.mklittlefs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mklittlefs \
+		&& cd .. && $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
 	rm -rf pkg.mklittlefs.$(call arch,$@) $(call log,$@)
 	touch $@
 
@@ -1167,42 +1267,26 @@ endif
 	echo STAGE: $@
 	rm -rf $(call arena,$@)/esptool $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/esptool $(call log,$@)
-	cp -a $(REPODIR)/esptool $(call arena,$@)/$(call log,$@)
+	cp -a $(REPODIR)/esptool $(call arena,$@)/ $(call log,$@)
 	# Dependencies borked in esptool makefile, so don't use parallel make
-	(cd $(call arena,$@)/esptool;\
-	    $(call setenv,$@); \
-	    $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
-			CC=$(CC) CXX=$(CXX) STRIP=$(STRIP) \
+	(cd $(call arena,$@)/esptool \
+	    && $(call setenv_cross,$@) \
+	    && $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
 			BUILD_CONFIG_NAME="-arduino-esp8266" \
             esptool$(call exe,$@)) $(call log,$@)
 	rm -rf pkg.esptool.$(call arch,$@) $(call log,$@)
 	mkdir -p pkg.esptool.$(call arch,$@)/esptool $(call log,$@)
 	cp $(call arena,$@)/esptool/esptool$(call exe,$@) pkg.esptool.$(call arch,$@)/esptool/. $(call log,$@)
 	(tarball=$(call host,$@).esptool-$$(cd $(REPODIR)/esptool \
-		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) ; \
-	    cd pkg.esptool.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} esptool; \
-		cd ..; $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) \
+	    && cd pkg.esptool.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} esptool \
+		&& cd .. && $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
 	rm -rf pkg.esptool.$(call arch,$@) $(call log,$@)
 	touch $@
 
-# local tools configure cannot figure out the arch triplet correctly
-# also note that locally configured toolchain lacks -cc & -c++ links to gcc
-.stage.%.mkspiffs .stage.%.mklittlefs .stage.%.esptool: CC=$(call host,$@)-gcc
-.stage.%.mkspiffs .stage.%.mklittlefs .stage.%.esptool: CXX=$(call host,$@)-g++
-.stage.%.mkspiffs .stage.%.mklittlefs .stage.%.esptool: STRIP=$(call host,$@)-strip
+.PHONY: .arduino.%
 
-# arm builds using clang, not gcc.
-# same as .stage.%.strip - simply stamp the target, never change it
-.stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: CC=$(call host,$@)-cc
-.stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: CXX=$(call host,$@)-c++
-.stage.MACOSARM.mkspiffs .stage.MACOSARM.mklittlefs .stage.MACOSARM.esptool: STRIP=touch
-
-.stage.%.done: .stage.%.package .stage.%.mkspiffs .stage.%.mklittlefs .stage.%.esptool
-	echo DONE: $(call arch,$@)
-	touch $@
-
-.PHONY: .stage.LINUX.arduino-checkout
-.stage.LINUX.arduino-checkout:
+.arduino.checkout:
 	echo "-------- Preparing Arduino repo at $(ARDUINO)"
 	test -d $(ARDUINO) || git clone https://github.com/$(GHUSER)/Arduino $(ARDUINO)
 	(cd $(ARDUINO) \
@@ -1212,49 +1296,55 @@ endif
 		&& git submodule init \
 		&& git submodule update)
 
-.PHONY: .stage.LINUX.arduino-toolchain
-.stage.LINUX.arduino-toolchain:
+.arduino.toolchain:
 	echo "-------- Copying GCC and LIBSTDC++ libs"
-	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libstdc++-exc.a $(ARDUINO)/tools/sdk/lib/.
-	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libstdc++.a     $(ARDUINO)/tools/sdk/lib/.
+	cp -vu \
+		$(call install,$@)/$(TARGET_ARCH)/lib/libstdc++-exc.a \
+		$(call install,$@)/$(TARGET_ARCH)/lib/libstdc++.a \
+		$(ARDUINO)/tools/sdk/lib/.
 	echo "-------- Copying toolchain directory"
 	rm -rf $(ARDUINO)/tools/sdk/$(TARGET_ARCH)
-	cp -va $(call install,$@)/$(TARGET_ARCH) $(ARDUINO)/tools/sdk/$(TARGET_ARCH)
+	cp -va $(call install,$@)/$(TARGET_ARCH) \
+		$(ARDUINO)/tools/sdk/$(TARGET_ARCH)
 
-.stage.LINUX.arduino-hal:
+.arduino.hal:
 	echo "-------- Copying HAL lib"
-	cp -vu $(call install,$@)/$(TARGET_ARCH)/lib/libhal.a $(ARDUINO)/tools/sdk/lib/.
+	cp -vu \
+		$(call install,$@)/$(TARGET_ARCH)/lib/libhal.a \
+		$(ARDUINO)/tools/sdk/lib/.
 
-.PHONY: .stage.LINUX.arduino-package-json
-.stage.LINUX.arduino-package-json:
+ARDUINO_PACKAGE_JSON := $(ARDUINO)/package/package_esp8266com_index.template.json
+
+.arduino.package-json:
 	echo "-------- Updating package.json"
-	ver=$(RELEASES_JSON_FULLVER); pkgfile=$(ARDUINO)/package/package_esp8266com_index.template.json; \
-	./patch_json.py --pkgfile "$${pkgfile}" --tool $(TARGET_ARCH)-gcc --ver "$${ver}" --glob '*$(TARGET_ARCH)*.json' ; \
-	./patch_json.py --pkgfile "$${pkgfile}" --tool esptool --ver "$${ver}" --glob '*esptool*json' ; \
-	./patch_json.py --pkgfile "$${pkgfile}" --tool mkspiffs --ver "$${ver}" --glob '*mkspiffs*json'; \
-	./patch_json.py --pkgfile "$${pkgfile}" --tool mklittlefs --ver "$${ver}" --glob '*mklittlefs*json'
+	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool $(TARGET_ARCH)-gcc --ver "$(RELEASES_JSON_FULLVER)" --glob '*$(TARGET_ARCH)*.json'
+	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool esptool --ver "$(RELEASES_JSON_FULLVER)" --glob '*esptool*json'
+	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool mkspiffs --ver "$(RELEASES_JSON_FULLVER)" --glob '*mkspiffs*json'
+	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool mklittlefs --ver "$(RELEASES_JSON_FULLVER)" --glob '*mklittlefs*json'
 
-.PHONY: .stage.LINUX.arduino-build
-.stage.LINUX.arduino-build:
+.arduino.build:
 	echo "-------- Installing toolchain"
-	(cd $(ARDUINO)/tools && tar xf $(REPODIR)/$(call tarball,$@))
+	(cd $(ARDUINO)/tools \
+		&& tar xf $(REPODIR)/$(call tarball,$@))
 	echo "-------- Building and installing BearSSL"
-	(cd $(ARDUINO)/tools/sdk/ssl && make clean && make all && make install)
+	(cd $(ARDUINO)/tools/sdk/ssl \
+		&& make clean && make all && make install)
 	echo "-------- Building and installing LWIP2"
-	(cd $(ARDUINO)/tools/sdk/lwip2 && make clean && make install)
+	(cd $(ARDUINO)/tools/sdk/lwip2 \
+		&& make clean && make install)
 	echo "-------- Building eboot.elf"
-	(cd $(ARDUINO)/bootloaders/eboot && make clean && make)
+	(cd $(ARDUINO)/bootloaders/eboot \
+		&& make clean && make)
 
 # Only the native version has to be done to install libs to GIT
 install: .stage.LINUX.install
 .stage.LINUX.install: .stage.LINUX.done
 	echo STAGE: $@
-	$(MAKE) .stage.LINUX.arduino-checkout
-	$(MAKE) .stage.LINUX.arduino-toolchain
-	$(MAKE) .stage.LINUX.arduino-hal
-	$(MAKE) .stage.LINUX.arduino-package-json
-	$(MAKE) .stage.LINUX.arduino-build
-	echo "Install done"
+	$(MAKE) .arduino.checkout
+	$(MAKE) .arduino.toolchain
+	$(MAKE) .arduino.hal
+	$(MAKE) .arduino.package-json
+	$(MAKE) .arduino.build
 	touch $@
 
 # Upload a draft toolchain release
