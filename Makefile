@@ -19,6 +19,7 @@ GCC     := $(if $(GCC),$(GCC),14.4)
 PWD      := $(shell pwd)
 REPODIR  := $(PWD)/repo
 PATCHDIR := $(PWD)/patches
+POSTDIR  := $(PWD)/post
 STAMP    := $(shell date +%y%m%d)
 REV      := $(shell git rev-parse --short HEAD)
 
@@ -1201,7 +1202,7 @@ endif
 
 .stage.%.post: .stage.%.strip
 	echo STAGE: $@
-	for sh in post/$(GCC)*.sh; do \
+	for sh in $(POSTDIR)/gcc$(GCC)-*.sh $(POSTDIR)/gcc$(GCC_MAJOR)-*.sh; do \
 	    [ -x "$${sh}" ] && $${sh} $(call ext,$@) ; \
 	done $(call log_stage,$@)
 	touch $@
