@@ -140,7 +140,7 @@ else ifeq ($(GCC), 14.4)
     GCC_PKGREL    := 140400
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_44
+    BINUTILS_BRANCH := binutils-2_47
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else
