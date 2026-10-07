@@ -1203,7 +1203,8 @@ endif
 .stage.%.post: .stage.%.strip
 	echo STAGE: $@
 	for sh in $(POSTDIR)/gcc$(GCC)-*.sh $(POSTDIR)/gcc$(GCC_MAJOR)-*.sh; do \
-	    [ -x "$${sh}" ] && $${sh} $(call ext,$@) ; \
+	    [ -x "$${sh}" ] || continue ; \
+		(set -x; $${sh} $(call ext,$@)) ; \
 	done $(call log_stage,$@)
 	touch $@
 
