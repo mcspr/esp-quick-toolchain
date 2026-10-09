@@ -20,6 +20,7 @@ PWD      := $(shell pwd)
 REPODIR  := $(PWD)/repo
 PATCHDIR := $(PWD)/patches
 POSTDIR  := $(PWD)/post
+PKGDIR   := $(PWD)/package
 STAMP    := $(shell date +%y%m%d)
 REV      := $(shell git rev-parse --short HEAD)
 
@@ -188,44 +189,45 @@ esptool_REPO := https://github.com/$(GHUSER)/esptool.git
 esptool_BRANCH := f80ae31d3b99eee41bd6a7fe6fdf4f889c1dc59b
 
 # external dependencies fetched as release blobs
+PACKAGES := gmp isl libexpat mpc mpfr ncurses
 
 # GNU GDB & the rest of external dependencies which are used for binutils and gcc builds
-ISL_URL := https://gcc.gnu.org/pub/gcc/infrastructure/isl-$(ISL_VER).tar.bz2
+isl_VER := ISL_VER
+isl_URL := https://gcc.gnu.org/pub/gcc/infrastructure/isl-$(isl_VER).tar.bz2
+isl_DIR := isl-$(isl_VER)
 
-GMP_VER := 6.3.0
-GMP_URL := https://gcc.gnu.org/pub/gcc/infrastructure/gmp-$(GMP_VER).tar.bz2
+gmp_VER := 6.3.0
+gmp_URL := https://gcc.gnu.org/pub/gcc/infrastructure/gmp-$(gmp_VER).tar.bz2
+gmp_DIR := gmp-$(gmp_VER)
 
-MPFR_VER := 4.2.2
-MPFR_URL := https://gcc.gnu.org/pub/gcc/infrastructure/mpfr-$(MPFR_VER).tar.bz2
+mpfr_VER := 4.2.2
+mpfr_URL := https://gcc.gnu.org/pub/gcc/infrastructure/mpfr-$(mpfr_VER).tar.bz2
+mpfr_DIR := mpfr-$(mpfr_VER)
 
-MPC_VER := 1.3.1
-MPC_URL := https://gcc.gnu.org/pub/gcc/infrastructure/mpc-$(MPC_VER).tar.gz
-
-# TODO: only used for gcc4.x builds
-CLOOG_VER := 0.18.1
-CLOOG_URL := https://gcc.gnu.org/pub/gcc/infrastructure/cloog-$(CLOOG_VER).tar.gz
+mpc_VER := 1.3.1
+mpc_URL := https://gcc.gnu.org/pub/gcc/infrastructure/mpc-$(mpc_VER).tar.gz
+mpc_DIR := mpc-$(mpc_VER)
 
 # libexpat release tagging works a bit weird
-LIBEXPAT_VER := 2.8.5
-LIBEXPAT_REV := R_$(subst .,_,$(LIBEXPAT_VER))
-LIBEXPAT_URL := https://github.com/libexpat/libexpat/releases/download/$(LIBEXPAT_REV)/expat-$(LIBEXPAT_VER).tar.bz2
+libexpat_VER := 2.8.5
+libexpat_REV := R_$(subst .,_,$(libexpat_VER))
+libexpat_URL := https://github.com/libexpat/libexpat/releases/download/$(libexpat_REV)/expat-$(libexpat_VER).tar.bz2
+libexpat_DIR := expat-$(libexpat_VER)
 
 # ncurses releases are sometimes just periodic snapshots
-NCURSES_VER := 41553966d3ac468f9fff0b63f98841aefb0cb04e
-NCURSES_URL := https://github.com/ThomasDickey/ncurses-snapshots/archive/$(NCURSES_VER).zip
+ncurses_VER := 41553966d3ac468f9fff0b63f98841aefb0cb04e
+ncurses_URL := https://github.com/ThomasDickey/ncurses-snapshots/archive/$(ncurses_VER).zip
+ncurses_DIR := ncurses-snapshots-$(ncurses_VER)
 
-URLS := \
-	$(GMP_URL) \
-	$(ISL_URL) \
-	$(LIBEXPAT_URL) \
-	$(MPC_URL) \
-	$(MPFR_URL) \
-	$(NCURSES_URL)
+# TODO: only used for gcc4.x builds
+cloog_VER := 0.18.1
+cloog_URL := https://gcc.gnu.org/pub/gcc/infrastructure/cloog-$(cloog_VER).tar.gz
+cloog_DIR := cloog-$(cloog_VER)
 
 GCC_MAJOR := $(word 1,$(subst ., ,$(GCC)))
 
 ifeq ($(GCC_MAJOR), 4)
-	URLS += $(CLOOG_URL)
+	PACKAGES += cloog
 endif
 
 # LTO doesn't work on 4.8, may not be useful later
@@ -235,7 +237,17 @@ LTO := $(if $(lto),$(lto),false)
 BUILD_TARGETS := LINUX LINUX32 ARM64 RPI WIN64 WIN32 MACOSARM MACOSX86
 
 # Define the build and output naming, don't use directly (see below)
-# currently not using ..._STATIC, but it would be called for tools builds
+# Currently not using ..._STATIC / -Wl,-static, its up to the tools
+#
+# ..._HOST   - build system target triplet
+# ..._AHOST  - arduino manifest architecture name
+# ..._EXT    - toolchain name suffix
+# ..._EXE    - toolchain executable files suffix
+# ..._MKTGT  - tool target os hint
+# ..._TARCMD - release archive compression tool
+# ..._TAREXT - release archive file suffix
+# ..._ASYS   - platformio manifest system name(s)
+#
 LINUX_HOST   := x86_64-linux-gnu
 LINUX_AHOST  := x86_64-pc-linux-gnu
 LINUX_EXT    := .x86_64
@@ -255,6 +267,26 @@ LINUX32_TARCMD := tar
 LINUX32_TAROPT := zcf
 LINUX32_TAREXT := tar.gz
 LINUX32_ASYS   := linux_i686
+
+ARM64_HOST   := aarch64-linux-gnu
+ARM64_AHOST  := aarch64-linux-gnu
+ARM64_EXT    := .arm64
+ARM64_EXE    :=
+ARM64_MKTGT  := linux
+ARM64_TARCMD := tar
+ARM64_TAROPT := zcf
+ARM64_TAREXT := tar.gz
+ARM64_ASYS   := linux_aarch64
+
+RPI_HOST   := arm-linux-gnueabihf
+RPI_AHOST  := arm-linux-gnueabihf
+RPI_EXT    := .rpi
+RPI_EXE    :=
+RPI_MKTGT  := linux
+RPI_TARCMD := tar
+RPI_TAROPT := zcf
+RPI_TAREXT := tar.gz
+RPI_ASYS   := linux_armv6l linux_armv7l
 
 WIN64_HOST   := x86_64-w64-mingw32
 WIN64_AHOST  := x86_64-mingw32
@@ -321,25 +353,10 @@ MACOSARM_CONFIGURE_FLAGS := \
 	CXX=$(MACOSARM_CXX) \
 	STRIP=$(MACOSARM_STRIP)
 
-ARM64_HOST   := aarch64-linux-gnu
-ARM64_AHOST  := aarch64-linux-gnu
-ARM64_EXT    := .arm64
-ARM64_EXE    :=
-ARM64_MKTGT  := linux
-ARM64_TARCMD := tar
-ARM64_TAROPT := zcf
-ARM64_TAREXT := tar.gz
-ARM64_ASYS   := linux_aarch64
-
-RPI_HOST   := arm-linux-gnueabihf
-RPI_AHOST  := arm-linux-gnueabihf
-RPI_EXT    := .rpi
-RPI_EXE    :=
-RPI_MKTGT  := linux
-RPI_TARCMD := tar
-RPI_TAROPT := zcf
-RPI_TAREXT := tar.gz
-RPI_ASYS   := linux_armv6l linux_armv7l
+# For .foo.%.bar recipe, where % is target architecture
+# (vs. $*, useful for both implicit and explicit targets)
+stem = $(subst .,,$(suffix $(basename $(1))))
+arch = $(call stem,$(1))
 
 # Call with $@ to get the appropriate variable for this architecture
 host   = $($(call arch,$(1))_HOST)
@@ -361,7 +378,7 @@ else
 	log = >> log$(1) 2>&1
 endif
 
-# For package.json and arduino build
+# For platformio package.json
 asys    = $($(call arch,$(1))_ASYS)
 tarball = $(call host,$(1)).$(TARGET_ARCH)-$(REV).$(STAMP).$(call tarext,$(1))
 
@@ -370,8 +387,6 @@ configure_flags = $($(call arch,$(1))_CONFIGURE_FLAGS)
 
 # The build directory per architecture
 arena = $(PWD)/arena$(call ext,$(1))
-# The architecture for this recipe
-arch = $(subst .,,$(suffix $(basename $(1))))
 # This installation directory for this architecture
 install = $(PWD)/$(TARGET_ARCH)$($(call arch,$(1))_EXT)
 # Shared libraries build prefix
@@ -397,9 +412,9 @@ CONFIGURE := \
 
 DUMPMACHINE := $(shell gcc -dumpmachine)
 configure = \
+	$(CONFIGURE) \
 	--build=$(DUMPMACHINE) \
 	--host=$(call host,$(1)) \
-	$(CONFIGURE) \
 	$(call configure_flags,$(1))
 
 configure_cross = \
@@ -648,6 +663,7 @@ endef
 
 # The recipes begin here.
 
+.PHONY: linux
 linux default: .stage.LINUX.done
 
 .PRECIOUS: .stage.% .stage.%.%
@@ -656,12 +672,16 @@ linux default: .stage.LINUX.done
 
 .PHONY: .git.% .git.%.%
 
-.PHONY: .stage.patch .stage.%.patch .stage.blobs .stage.checkout
+.PHONY: .package.% .package.%.%
+
+.PHONY: .stage.patch .stage.fetch .stage.checkout
+
+.PHONY: .stage.%.info .stage.%.patch .stage.%.fetch .stage.%.clean
 
 # Leave jobserver to the submake calls
 .NOTPARALLEL:
 
-download: .stage.gitclone .stage.blobs
+download: .stage.checkout .stage.fetch
 
 build_done = .stage.$(1).package .stage.$(1).mkspiffs .stage.$(1).mklittlefs .stage.$(1).esptool
 
@@ -676,12 +696,12 @@ $(foreach target,$(BUILD_TARGETS),$(eval $(call recipe_done,$(target))))
 # Build all toolchain versions
 BUILD_DONE = $(patsubst %,.stage.%.done,$(BUILD_TARGETS))
 
-define newline
+define __newline
 
 endef
 
 define make_done_recipe
-	$(MAKE) .stage.$(1).done$(newline)
+	$(MAKE) .stage.$(1).done$(__newline)
 endef
 
 BUILD_TARGETS_WITHOUT_LINUX := $(filter-out LINUX,$(BUILD_TARGETS))
@@ -722,41 +742,64 @@ $(eval $(foreach target,$(BUILD_TARGETS_WITHOUT_LINUX),$(call make_phony_other_r
 # Clean all temporary build and arena directories
 .clean.%.install-and-arena:
 	echo STAGE: $@
-	rm -rf $(call install,$@) > /dev/null 2>&1
-	rm -rf $(call arena,$@) > /dev/null 2>&1
+ifneq ($(NOCLEAN),1)
+	rm -rf $(call install,$@)
+	rm -rf $(call arena,$@)
+endif
 
-BUILD_CLEAN = $(patsubst %,.clean.%.install-and-arena,$(BUILD_TARGETS))
-clean: $(BUILD_CLEAN)
+# Clean all files generated during TARGET stage
+.stage.%.clean:
 	echo STAGE: $@
-	rm -rf .stage* *.json *.tar.gz *.zip pkg.* log.* > /dev/null 2>&1
+ifneq ($(NOCLEAN),1)
+	rm -vf $(patsubst .stage.%.clean,.stage.%*,$@)
+	rm -vf $(patsubst .stage.%.clean,log.stage.%*,$@)
+	rm -vrf $(PKGDIR)/pkg.*$(call arch,$@)*
+	rm -vf $(PKGDIR)/$(call host,$@)*
+endif
 
-gitdir = $($(1)_DIR)
-gitrepo = $($(1)_REPO)
-gitbranch = $($(1)_BRANCH)
+BUILD_CLEAN_TARGETS = $(patsubst %,.clean.%.install-and-arena,$(BUILD_TARGETS))
+STAGE_CLEAN_TARGETS = $(patsubst %,.stage.%.clean,$(BUILD_TARGETS))
+clean: $(BUILD_CLEAN_TARGETS) $(STAGE_CLEAN_TARGETS)
+	echo STAGE: $@
+
+__gitrepo = $(if $($(1)_REPO),$($(1)_REPO),$(error no git repo for $(1)))
+gitrepo = $(call __gitrepo,$(call stem,$(1)))
+
+__gitbranch = $(if $($(1)_BRANCH),$($(1)_BRANCH),$(error no git branch for $(1)))
+gitbranch = $(call __gitbranch,$(call stem,$(1)))
+
+__gitdir = $(if $($(1)_DIR),$($(1)_DIR),$(error no git dir for $(1)))
+gitdir = $(call __gitdir,$(call stem,$(1)))
 
 # Download the needed GIT repos
 REPOS := gcc binutils newlib lx106-hal mkspiffs mklittlefs esptool
 
-CLONE_REPOS = $(patsubst %,.git.%.clone,$(REPOS))
-.stage.gitclone: $(CLONE_REPOS)
+.git.%.info:
+	@echo '{ "name": "$(call stem,$@)"',
+	@echo '  "url": "$(call gitrepo,$@)"',
+	@echo '  "branch": "$(call gitbranch,$@)"',
+	@echo '  "dir": "$(REPODIR)/$(call gitdir,$@)" }'
+
+REPOS_INFO = $(patsubst %,.git.%.info,$(REPOS))
+.git.info: $(REPOS_INFO)
 
 .git.%.clone: .git.%.reset-and-clean
 	echo STAGE: $@
 	mkdir -p $(REPODIR)/
-	(test -d $(REPODIR)/$(call gitdir,$*) \
+	(test -d $(REPODIR)/$(call gitdir,$@) \
 		|| git clone --recurse-submodules \
-			--branch $(call gitbranch,$*) \
-			$(call gitrepo,$*) \
-			$(REPODIR)/$(call gitdir,$*) ) $(call log_stage,$@)
+			--branch $(call gitbranch,$@) \
+			$(call gitrepo,$@) \
+			$(REPODIR)/$(call gitdir,$@) ) $(call log_stage,$@)
 
 # Completely clean out a git directory, removing any untracked files
 .git.%.reset-and-clean:
 	echo STAGE: $@
-	(test -d $(REPODIR)/$(call gitdir,$(*))/.git \
-		&& cd $(REPODIR)/$(call gitdir,$(*)) \
+	(test -d $(REPODIR)/$(call gitdir,$@)/.git \
+		&& cd $(REPODIR)/$(call gitdir,$@) \
 		&& git reset --hard --recurse-submodules \
 		&& git clean -x -f -d ) \
-	&& echo " GIT CLEAN $(call gitdir,$*)" \
+	&& echo " GIT CLEAN $(call gitdir,$@)" \
 	|| echo " GIT NOCLEAN $@"
 
 CLEAN_REPOS = $(patsubst %,.git.%.reset-and-clean,$(REPOS))
@@ -764,32 +807,74 @@ CLEAN_REPOS = $(patsubst %,.git.%.reset-and-clean,$(REPOS))
 
 .git.%.checkout: .git.%.clone
 	echo STAGE: $@
-	(test -d $(REPODIR)/$(call gitdir,$(*))/.git \
-		&& cd $(REPODIR)/$(call gitdir,$*) \
-		&& git checkout $(call gitbranch,$*) ) \
-	&& echo " GIT CHECKOUT $(call gitdir,$*)" \
+	(test -d $(REPODIR)/$(call gitdir,$@)/.git \
+		&& cd $(REPODIR)/$(call gitdir,$@) \
+		&& git checkout $(call gitbranch,$@) ) \
+	&& echo " GIT CHECKOUT $(call gitdir,$@)" \
 	|| echo " GIT NOCHECKOUT $@"
 
 # Checkout any required branches
 CHECKOUT_REPOS = $(patsubst %,.git.%.checkout,$(REPOS))
 .stage.checkout: $(CHECKOUT_REPOS)
 
-# Prep fetched urls & local archives
-.stage.fetch:
+# TODO: tarball support for humongous repos (gcc, binutils, etc.)
+# 		while very useful for development, not so much for just building
+# 		current archive unpack impl should behave similarly to git-clean
+
+# Packages usually just fetched & unpacked, there is no patching being done
+__pkgurl = $(if $($(1)_URL),$($(1)_URL),$(error no package url for $(1)))
+pkgurl = $(call __pkgurl,$(call stem,$(1)))
+
+__pkgver = $(if $($(1)_VER),$($(1)_VER),$(error no package version for $(1)))
+pkgver = $(call __pkgver,$(call stem,$(1)))
+
+__pkgdir = $(if $($(1)_DIR),$($(1)_DIR),$(error no package dir for $(1)))
+pkgdir = $(call __pkgdir,$(call stem,$(1)))
+
+__pkgarchive = $(lastword $(subst /, ,$(call __pkgurl,$(1))))
+pkgarchive = $(call __pkgarchive,$(call stem,$(1)))
+
+__pkgsuffix = $(suffix $(call __pkgarchive,$(1)))
+__pkgfullsuffix = $(findstring .tar,$(call __pkgarchive,$(1)))$(call __pkgsuffix,$(1))
+__pkgext = $(if $(call __pkgfullsuffix,$(1)),$(call __pkgfullsuffix,$(1)),$(error no known archive extension for $(1)))
+pkgext = $(call __pkgext,$(call stem,$(1)))
+
+# Fetch package urls & unpack archives
+.package.%.info:
+	@echo '{ "name": "$(call stem,$@)",'
+	@echo '  "url": "$(call pkgurl,$@)"',
+	@echo '  "version": "$(call pkgver,$@)"',
+	@echo '  "dir": "$(REPODIR)/$(call pkgdir,$@)"',
+	@echo '  "archive": "$(REPODIR)/$(call pkgarchive,$@)"',
+	@echo '  "extension": "$(call pkgext,$@)" }'
+
+PACKAGES_INFO = $(patsubst %,.package.%.info,$(PACKAGES))
+.package.info: $(PACKAGES_INFO)
+
+.package.%.fetch:
 	echo STAGE: $@
 	mkdir -p $(REPODIR)/
-	(for url in $(URLS) ; do \
-	    archive=$${url##*/}; name=$${archive%.t*}; base=$${name%-*}; ext=$${archive##*.} ; \
-		test -r $(REPODIR)/$${archive} || wget -v -O $(REPODIR)/$${archive} $${url} ; \
-		(cd $(REPODIR) && \
-			case "$${ext}" in \
-				(bz2|gz|lz|xz) tar xf $${archive} ;; \
-				(zip) unzip -qu $${archive} ;; \
-				(*) echo " ERROR Unknown archive type $${ext}" ; exit 1 ;; \
-			esac && echo " BLOB $${archive}") ; \
-	done) $(call log_stage,$@)
+	test -r $(REPODIR)/$(call pkgarchive,$@) \
+		|| wget -v -O $(REPODIR)/$(call pkgarchive,$@) $(call pkgurl,$@) $(call log_stage,$@)
 
-.stage.blobs: .stage.fetch .git.gcc.checkout
+.package.%.unpack: .package.%.fetch
+	echo STAGE: $@
+	mkdir -p $(REPODIR)/
+	test -r $(REPODIR)/$(call pkgarchive,$@)
+	rm -rf $(REPODIR)/$(call pkgdir,$@)
+	(cd $(REPODIR) && \
+		archive="$(call pkgarchive,$@)"; \
+		ext="$(call pkgext,$@)"; \
+		case "$$ext" in \
+			(.t*) tar xf $$archive ;; \
+			(.zip) unzip -qu $$archive ;; \
+			(*) echo "-ERROR Unknown archive type"; exit 1 ;; \
+		esac && echo "UNPACKED $$archive")
+	test -d $(REPODIR)/$(call pkgdir,$@)
+
+FETCH_PACKAGES = $(patsubst %,.package.%.unpack,$(PACKAGES))
+.stage.fetch: $(FETCH_PACKAGES)
+	echo STAGE: $@
 
 # Checkout and reset, then apply patches to the local GIT repos
 patch = \
@@ -881,7 +966,7 @@ $(OVERLAY_CORE_ISA_H): $(LX106_HAL_CORE_ISA_H)
 ifneq ($(NOCLEAN),1)
 # Fetch, checkout all git repositories and apply all patches
 PATCH_REPOS = $(patsubst %,.stage.%.patch,$(REPOS))
-.stage.patch: $(PATCH_REPOS) .stage.blobs .stage.checkout
+.stage.patch: $(PATCH_REPOS) .stage.fetch .stage.checkout
 else
 # DO NOT clear git repos w/ NOCLEAN=1
 .stage.patch:
@@ -895,32 +980,42 @@ ifneq ($(NOCLEAN),1)
 	rm -rf $(call arena,$@)/cross
 endif
 
+# Info about current stage build configuration
+.stage.%.info:
+	@echo '{ "setenv": "$(subst ",\",$(call setenv,$@))"',
+	@echo '  "configure": "$(call configure,$@)"',
+	@echo '  "configure_ncurses": "$(CONFIGURE_NCURSES)"',
+	@echo '  "configure_libexpat": "$(CONFIGURE_LIBEXPAT)"',
+	@echo '  "configure_binutils": "$(call configure_binutils,$@)"',
+	@echo '  "configure_gdb": "$(call configure_gdb,$@)"',
+	@echo '  "configure_newlib": "$(call configure_newlib,$@)" }'
+
 # Shared dependency for binutils and gcc
 .stage.%.gmp:
 	echo STAGE: $@
-	rm -rf $(call arena,$@)/gmp-$(GMP_VER) $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/gmp-$(GMP_VER) $(call log,$@)
-	(cd $(call arena,$@)/gmp-$(GMP_VER) \
+	rm -rf $(call arena,$@)/gmp $(call log_stage,$@)
+	mkdir -p $(call arena,$@)/gmp $(call log,$@)
+	(cd $(call arena,$@)/gmp \
 		&& $(call setenv,$@) \
-		&& $(REPODIR)/gmp-$(GMP_VER)/configure \
+		&& $(REPODIR)/$(gmp_DIR)/configure \
 			$(call configure_cross,$@) \
 			$(GMP_CONFIGURE_FLAGS) \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
-	rm -rf $(call arena,$@)/mpfr-$(MPFR_VER) $(call log,$@)
-	mkdir -p $(call arena,$@)/mpfr-$(MPFR_VER) $(call log,$@)
-	(cd $(call arena,$@)/mpfr-$(MPFR_VER) \
+	rm -rf $(call arena,$@)/mpfr $(call log,$@)
+	mkdir -p $(call arena,$@)/mpfr $(call log,$@)
+	(cd $(call arena,$@)/mpfr \
 		&& $(call setenv,$@) \
-		&& $(REPODIR)/mpfr-$(MPFR_VER)/configure \
+		&& $(REPODIR)/$(mpfr_DIR)/configure \
 			$(call configure_cross,$@) \
 			$(call configure_with_gmp,$@) \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
-	rm -rf $(call arena,$@)/mpc-$(MPC_VER) $(call log,$@)
-	mkdir -p $(call arena,$@)/mpc-$(MPC_VER) $(call log,$@)
-	(cd $(call arena,$@)/mpc-$(MPC_VER) \
+	rm -rf $(call arena,$@)/mpc $(call log,$@)
+	mkdir -p $(call arena,$@)/mpc $(call log,$@)
+	(cd $(call arena,$@)/mpc \
 		&& $(call setenv,$@) \
-		&& $(REPODIR)/mpc-$(MPC_VER)/configure \
+		&& $(REPODIR)/$(mpc_DIR)/configure \
 			$(call configure_cross,$@) \
 			$(call configure_with_gmp,$@) \
 		&& $(MAKE) \
@@ -934,7 +1029,7 @@ endif
 	mkdir -p $(call arena,$@)/isl $(call log,$@)
 	(cd $(call arena,$@)/isl \
 		&& $(call setenv,$@) \
-		&& $(REPODIR)/isl-$(ISL_VER)/configure \
+		&& $(REPODIR)/$(isl_DIR)/configure \
 			$(call configure_cross,$@) \
 			--with-gmp-prefix=$(call arena,$@)/cross \
 		&& $(MAKE) \
@@ -951,7 +1046,7 @@ endif
 	mkdir -p $(call arena,$@)/libexpat $(call log,$@)
 	(cd $(call arena,$@)/libexpat \
 		&& $(call setenv,$@) \
-		&& cp -r $(REPODIR)/expat-$(LIBEXPAT_VER)/* ./ \
+		&& cp -r $(REPODIR)/$(libexpat_DIR)/* ./ \
 		&& bash buildconf.sh \
 		&& ./configure \
 			$(call configure_cross,$@) \
@@ -971,7 +1066,7 @@ endif
 	mkdir -p $(call arena,$@)/ncurses-progs $(call log,$@)
 	(cd $(call arena,$@)/ncurses-progs \
 		&& $(call setenv_cross,$@) \
-		&& $(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure \
+		&& $(REPODIR)/$(ncurses_DIR)/configure \
 			$(call configure_ncurses,$@) \
 			$(NCURSES_CONFIGURE_FLAGS_WITH_PROGS) \
 		&& $(MAKE) \
@@ -985,7 +1080,7 @@ endif
 	mkdir -p $(call arena,$@)/ncurses $(call log,$@)
 	(cd $(call arena,$@)/ncurses \
 		&& $(call setenv_cross,$@) \
-		&& $(REPODIR)/ncurses-snapshots-$(NCURSES_VER)/configure \
+		&& $(REPODIR)/$(ncurses_DIR)/configure \
 			$(call configure_ncurses,$@) \
 			$(NCURSES_CONFIGURE_FLAGS_WITH_FALLBACKS) \
 		&& $(MAKE) \
@@ -1210,24 +1305,26 @@ endif
 
 .stage.%.package: .stage.%.post
 	echo STAGE: $@
-	rm -rf pkg.$(call arch,$@) $(call log_stage,$@)
-	mkdir -p pkg.$(call arch,$@) $(call log,$@)
-	cp -a $(call install,$@) pkg.$(call arch,$@)/$(TARGET_ARCH) $(call log,$@)
-	(cd pkg.$(call arch,$@)/$(TARGET_ARCH) \
+	mkdir -p $(PKGDIR) $(call log_stage,$@)
+	rm -rf $(PKGDIR)/pkg.$(call arch,$@) $(call log,$@)
+	mkdir -p $(PKGDIR)/pkg.$(call arch,$@) $(call log,$@)
+	cp -a $(call install,$@) $(PKGDIR)/pkg.$(call arch,$@)/$(TARGET_ARCH) $(call log,$@)
+	(cd $(PKGDIR)/pkg.$(call arch,$@)/$(TARGET_ARCH) \
 		&& $(call make_package_json,toolchain-xtensa,xtensa-gcc,$(call asys,$@)) ) $(call log,$@)
 	(tarball=$(call tarball,$@) \
-	    && cd pkg.$(call arch,$@) \
-		&& $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} $(TARGET_ARCH)/ \
-		&& cd .. \
+	    && cd $(PKGDIR)/pkg.$(call arch,$@) \
+		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TARGET_ARCH)/ \
+		&& cd $(PKGDIR) \
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
-	rm -rf pkg.$(call arch,$@) $(call log,$@)
+	rm -rf $(PKGDIR)/pkg.$(call arch,$@) $(call log,$@)
 	touch $@
 
 # packaged tools depend only on the host toolchain
 
 .stage.%.mkspiffs:
 	echo STAGE: $@
-	rm -rf $(call arena,$@)/mkspiffs $(call log_stage,$@)
+	mkdir -p $(PKGDIR) $(call log_stage,$@)
+	rm -rf $(call arena,$@)/mkspiffs $(call log,$@)
 	mkdir -p $(call arena,$@)/mkspiffs $(call log,$@)
 	cp -a $(REPODIR)/$(mkspiffs_DIR) $(call arena,$@)/ $(call log,$@)
 	# Dependencies borked in mkspiffs makefile, so don't use parallel make
@@ -1237,21 +1334,22 @@ endif
 			BUILD_CONFIG_NAME="-arduino-esp8266" \
 			CPPFLAGS="-DSPIFFS_USE_MAGIC_LENGTH=0 -DSPIFFS_ALIGNED_OBJECT_INDEX_TABLES=1" \
             mkspiffs$(call exe,$@)) $(call log,$@)
-	rm -rf pkg.mkspiffs.$(call arch,$@) $(call log,$@)
-	mkdir -p pkg.mkspiffs.$(call arch,$@)/mkspiffs $(call log,$@)
-	(cd pkg.mkspiffs.$(call arch,$@)/mkspiffs \
+	rm -rf $(PKGDIR)/pkg.mkspiffs.$(call arch,$@) $(call log,$@)
+	mkdir -p $(PKGDIR)/pkg.mkspiffs.$(call arch,$@)/mkspiffs $(call log,$@)
+	(cd $(PKGDIR)/pkg.mkspiffs.$(call arch,$@)/mkspiffs \
 		&& $(call make_package_json,mkspiffs,mkspiffs-utility,$(call asys,$@)) ) $(call log,$@)
-	cp $(call arena,$@)/mkspiffs/mkspiffs$(call exe,$@) pkg.mkspiffs.$(call arch,$@)/mkspiffs/. $(call log,$@)
+	cp $(call arena,$@)/mkspiffs/mkspiffs$(call exe,$@) $(PKGDIR)/pkg.mkspiffs.$(call arch,$@)/mkspiffs/. $(call log,$@)
 	(tarball=$(call host,$@).mkspiffs-$$(cd $(REPODIR)/$(mkspiffs_DIR) \
 		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) \
-	    && cd pkg.mkspiffs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mkspiffs \
-		&& cd .. && $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
-	rm -rf pkg.mkspiffs.$(call arch,$@) $(call log,$@)
+	    && cd $(PKGDIR)/pkg.mkspiffs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} mkspiffs \
+		&& cd $(PKGDIR) && $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+	rm -rf $(PKGDIR)/pkg.mkspiffs.$(call arch,$@) $(call log,$@)
 	touch $@
 
 .stage.%.mklittlefs:
 	echo STAGE: $@
-	rm -rf $(call arena,$@)/mklittlefs $(call log_stage,$@)
+	mkdir -p $(PKGDIR) $(call log_stage,$@)
+	rm -rf $(call arena,$@)/mklittlefs $(call log,$@)
 	mkdir -p $(call arena,$@)/mklittlefs $(call log,$@)
 	cp -a $(REPODIR)/mklittlefs $(call arena,$@)/ $(call log,$@)
 	# Dependencies borked in mklittlefs makefile, so don't use parallel make
@@ -1260,22 +1358,23 @@ endif
 	    && $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
 			BUILD_CONFIG_NAME="-arduino-esp8266" \
             mklittlefs$(call exe,$@)) $(call log,$@)
-	rm -rf pkg.mklittlefs.$(call arch,$@) $(call log,$@)
-	mkdir -p pkg.mklittlefs.$(call arch,$@)/mklittlefs $(call log,$@)
-	(cd pkg.mklittlefs.$(call arch,$@)/mklittlefs \
+	rm -rf $(PKGDIR)/pkg.mklittlefs.$(call arch,$@) $(call log,$@)
+	mkdir -p $(PKGDIR)/pkg.mklittlefs.$(call arch,$@)/mklittlefs $(call log,$@)
+	(cd $(PKGDIR)/pkg.mklittlefs.$(call arch,$@)/mklittlefs \
 		&& $(call make_package_json,mklittlefs,littlefs-utility,$(call asys,$@)) ) $(call log,$@)
-	cp $(call arena,$@)/mklittlefs/mklittlefs$(call exe,$@) pkg.mklittlefs.$(call arch,$@)/mklittlefs/. $(call log,$@)
+	cp $(call arena,$@)/mklittlefs/mklittlefs$(call exe,$@) $(PKGDIR)/pkg.mklittlefs.$(call arch,$@)/mklittlefs/. $(call log,$@)
 	(tarball=$(call host,$@).mklittlefs-$$(cd $(REPODIR)/mklittlefs \
 		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) \
-	    && cd pkg.mklittlefs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} mklittlefs \
-		&& cd .. && $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
-	rm -rf pkg.mklittlefs.$(call arch,$@) $(call log,$@)
+	    && cd $(PKGDIR)/pkg.mklittlefs.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} mklittlefs \
+		&& cd $(PKGDIR) && $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+	rm -rf $(PKGDIR)/pkg.mklittlefs.$(call arch,$@) $(call log,$@)
 	touch $@
 
 # TODO still packaged, but esptool-ck was deprecated in favour of esptool-py a long time ago
 .stage.%.esptool:
 	echo STAGE: $@
-	rm -rf $(call arena,$@)/esptool $(call log_stage,$@)
+	mkdir -p $(PKGDIR) $(call log_stage,$@)
+	rm -rf $(call arena,$@)/esptool $(call log,$@)
 	mkdir -p $(call arena,$@)/esptool $(call log,$@)
 	cp -a $(REPODIR)/esptool $(call arena,$@)/ $(call log,$@)
 	# Dependencies borked in esptool makefile, so don't use parallel make
@@ -1284,14 +1383,14 @@ endif
 	    && $(MAKE) -j1 TARGET_OS=$(call mktgt,$@) \
 			BUILD_CONFIG_NAME="-arduino-esp8266" \
             esptool$(call exe,$@)) $(call log,$@)
-	rm -rf pkg.esptool.$(call arch,$@) $(call log,$@)
-	mkdir -p pkg.esptool.$(call arch,$@)/esptool $(call log,$@)
-	cp $(call arena,$@)/esptool/esptool$(call exe,$@) pkg.esptool.$(call arch,$@)/esptool/. $(call log,$@)
+	rm -rf $(PKGDIR)/pkg.esptool.$(call arch,$@) $(call log,$@)
+	mkdir -p $(PKGDIR)/pkg.esptool.$(call arch,$@)/esptool $(call log,$@)
+	cp $(call arena,$@)/esptool/esptool$(call exe,$@) $(PKGDIR)/pkg.esptool.$(call arch,$@)/esptool/. $(call log,$@)
 	(tarball=$(call host,$@).esptool-$$(cd $(REPODIR)/esptool \
 		&& git rev-parse --short HEAD).$(STAMP).$(call tarext,$@) \
-	    && cd pkg.esptool.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) ../$${tarball} esptool \
-		&& cd .. && $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
-	rm -rf pkg.esptool.$(call arch,$@) $(call log,$@)
+	    && cd $(PKGDIR)/pkg.esptool.$(call arch,$@) && $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} esptool \
+		&& cd $(PKGDIR) && $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+	rm -rf $(PKGDIR)/pkg.esptool.$(call arch,$@) $(call log,$@)
 	touch $@
 
 .PHONY: .arduino.%
@@ -1325,12 +1424,12 @@ endif
 
 ARDUINO_PACKAGE_JSON := $(ARDUINO)/package/package_esp8266com_index.template.json
 
-.arduino.package-json:
-	echo "-------- Updating package.json"
-	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool $(TARGET_ARCH)-gcc --ver "$(RELEASES_JSON_FULLVER)" --glob '*$(TARGET_ARCH)*.json'
-	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool esptool --ver "$(RELEASES_JSON_FULLVER)" --glob '*esptool*json'
-	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool mkspiffs --ver "$(RELEASES_JSON_FULLVER)" --glob '*mkspiffs*json'
-	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool mklittlefs --ver "$(RELEASES_JSON_FULLVER)" --glob '*mklittlefs*json'
+.arduino.package-template-json:
+	echo "-------- Updating package template.json"
+	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool $(TARGET_ARCH)-gcc --ver "$(RELEASES_JSON_FULLVER)" --glob '$(PKGDIR)/*$(TARGET_ARCH)*.json'
+	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool esptool --ver "$(RELEASES_JSON_FULLVER)" --glob '$(PKGDIR)/*esptool*.json'
+	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool mkspiffs --ver "$(RELEASES_JSON_FULLVER)" --glob '$(PKGDIR)/*mkspiffs*.json'
+	./patch_json.py --pkgfile "$(ARDUINO_PACKAGE_JSON)" --tool mklittlefs --ver "$(RELEASES_JSON_FULLVER)" --glob '$(PKGDIR)/*mklittlefs*.json'
 
 .arduino.build:
 	echo "-------- Installing toolchain"
@@ -1347,20 +1446,19 @@ ARDUINO_PACKAGE_JSON := $(ARDUINO)/package/package_esp8266com_index.template.jso
 		&& make clean && make)
 
 # Only the native version has to be done to install libs to GIT
-install: .stage.LINUX.install
-.stage.LINUX.install: .stage.LINUX.done
+.PHONY: install
+install: .stage.LINUX.done
 	echo STAGE: $@
 	$(MAKE) .arduino.checkout
 	$(MAKE) .arduino.toolchain
 	$(MAKE) .arduino.hal
-	$(MAKE) .arduino.package-json
+	$(MAKE) .arduino.package-template-json
 	$(MAKE) .arduino.build
 	touch $@
 
 # Upload a draft toolchain release
-.PHONY: .stage.upload
-upload: .stage.upload
-.stage.upload: $(BUILD_DONE)
+.PHONY: upload
+upload: $(BUILD_DONE)
 	echo STAGE: $@
 	rm -rf ./arena.upload
 	mkdir ./arena.upload
@@ -1377,13 +1475,3 @@ upload: .stage.upload
 				--msg "See https://github.com/esp8266/Arduino for more info" \
 				$$(find ./ -maxdepth 1 -name "*.tar.gz" -o -name "*.zip") )
 	rm -rf ./arena.upload
-
-.PHONY: .stage.%.dumpvars
-.stage.%.dumpvars:
-	echo SETENV:	'$(call setenv,$@)'
-	echo CONFIGURE:	'$(call configure,$@)'
-	echo NCURSES:	'$(CONFIGURE_NCURSES)'
-	echo LIBEXPAT:	'$(CONFIGURE_LIBEXPAT)'
-	echo BINUTILS:	'$(call configure_binutils,$@)'
-	echo GDB:	'$(call configure_gdb,$@)'
-	echo NEWLIB:	'$(call configure_newlib,$@)'
