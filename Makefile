@@ -1475,3 +1475,103 @@ upload: $(BUILD_DONE)
 				--msg "See https://github.com/esp8266/Arduino for more info" \
 				$$(find ./ -maxdepth 1 -name "*.tar.gz" -o -name "*.zip") )
 	rm -rf ./arena.upload
+
+# python sourced from astral-sh/python-build-standalone
+# note that some versions take the one from the system or environment
+PYTHON_RELEASE := 20261009
+PYTHON_VERSION := 3.14.8
+
+__python_archive = cpython-$(PYTHON_VERSION)+$(PYTHON_RELEASE)-$(1)-install_only_stripped$(2)
+python_url = https://github.com/astral-sh/python-build-standalone/releases/download/$(PYTHON_RELEASE)/$(call __python_archive,$(1),$(2))
+
+__arch_python = $(if $($(1)_PYTHON),$($(1)_PYTHON),$(error no python defined for $(1)))
+__asys_python = $(if $($(1)_ASYS),$($(1)_ASYS),$(error no asys defined for $(1)))
+__python_dir = python-$(call __asys_python,$(1))-$(PYTHON_VERSION)
+python_dir = $(call __python_dir,$(call arch,$(1)))
+
+# xxx: initial state and side-effect of python_package macro below
+PYTHON_VIA_ENV_TARGETS := $(BUILD_TARGETS)
+
+define python_package
+
+ifneq ($(1),LINUX)
+PYTHON_VIA_ENV_TARGETS := $$(filter-out $(1),$$(PYTHON_VIA_ENV_TARGETS))
+endif
+
+$(1)_PYTHON := $(2)
+python-$(2)_URL := $(call python_url,$(2),.tar.gz)
+python-$(2)_VER := $(PYTHON_VERSION)
+python-$(2)_DIR := $(call __python_dir,$(1))
+
+.stage.$(1).python: .package.python-$(2).unpack
+
+.stage.$(1).python-info: .package.python-$(2).info
+
+.package.python-$(2).unpack: .package.python-$(2).fetch
+	echo STAGE: $$@
+	rm -rf $$(REPODIR)/$$(call pkgdir,$$@)
+	mkdir -p $$(REPODIR)/$$(call pkgdir,$$@)
+	# unique top-dir for otherwise similarly structured archives
+	# nb. there is --transform, but it is very precious with symlinks
+	(cd $$(REPODIR)/$$(call pkgdir,$$@) \
+		&& tar xf ../$$(call pkgarchive,$$@) \
+		&& test -d python/ && test ! -d python/python \
+		&& mv python/* ./ \
+		&& rm -rf python )
+
+endef
+
+# LINUX arch used only for bootstrapping, even though the interpreter is expected to work
+$(eval $(call python_package,LINUX,x86_64-unknown-linux-gnu))
+
+# these arches cant use or dont have system interpreter
+$(eval $(call python_package,WIN32,i686-pc-windows-msvc))
+$(eval $(call python_package,WIN64,x86_64-pc-windows-msvc))
+
+$(eval $(call python_package,MACOSX86,x86_64-apple-darwin))
+$(eval $(call python_package,MACOSARM,aarch64-apple-darwin))
+
+.PHONY: .stage.%.python .stage.%.python-via-env .stage.%.python-info
+
+# if not explicitly set above, other targets expect system python / pointed to through environment var
+# ref. python_via_env.py
+PYTHON_VIA_ENV_STAGES := $(patsubst %,.stage.%.python-via-env,$(PYTHON_VIA_ENV_TARGETS))
+
+$(PYTHON_VIA_ENV_STAGES):
+	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
+	(tarball=$(call host,$@).python-via-env.$(call tarext,$@) \
+	    && cd $(PKGDIR)/pkg.python.$(call arch,$@) \
+		&& mkdir -p python3 \
+		&& touch python3/placeholder_for_arduino \
+		&& cp -v $(PWD)/python_via_env.py ./python3 \
+		&& chmod +x ./python3 \
+		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
+		&& cd $(PKGDIR) \
+		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
+
+define python_via_env
+
+.stage.$(1).python: .stage.$(1).python-via-env
+	echo STAGE: $$@
+
+endef
+
+$(foreach target,$(PYTHON_VIA_ENV_TARGETS),$(eval $(call python_via_env,$(target))))
+
+# 1) prepare PyZipFile (aka pythonVER.zip) with immutable standard library pyc
+# 2) prepare pythonVER._pth pointing to PyZipFile and any relevant paths (Windows DLLs dir, current dir, etc.)
+# 3) ensure root dir is named python3, and there is callable python3/python3(.exe)
+# 4) repackage through tarcmd (TODO arduino-cli or spec really care?)
+.stage.%.python:
+	echo STAGE: $@
+	(cd $(REPODIR)/$(call python_dir,$@) \
+		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py ./ )
+	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
+	(tarball=$(call host,$@).python.$(call tarext,$@) \
+	    && cd $(PKGDIR)/pkg.python.$(call arch,$@) \
+		&& cp -r $(REPODIR)/$(call python_dir,$@) ./python3 \
+		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
+		&& cd $(PKGDIR) \
+		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
