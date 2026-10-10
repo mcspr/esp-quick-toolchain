@@ -1548,7 +1548,7 @@ $(PYTHON_VIA_ENV_STAGES):
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
 	(tarball=$(call host,$@)-python-via-env.$(call tarext,$@) \
-		&& rm -vf $$tarball \
+		&& rm -vf $(PKGDIR)/$$tarball \
 	    && cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& mkdir -p python3 \
 		&& touch python3/placeholder_for_arduino \
@@ -1579,7 +1579,7 @@ $(foreach target,$(PYTHON_VIA_ENV_TARGETS),$(eval $(call python_via_env,$(target
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
 	(tarball=$(call host,$@)-python.$(call tarext,$@) \
-		&& rm -vf $$tarball \
+		&& rm -vf $(PKGDIR)/$$tarball \
 		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& cp -r $(REPODIR)/$(call python_dir,$@) ./python3 \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
