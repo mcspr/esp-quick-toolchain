@@ -683,7 +683,7 @@ linux default: .stage.LINUX.done
 
 download: .stage.checkout .stage.fetch
 
-build_done = .stage.$(1).package .stage.$(1).mkspiffs .stage.$(1).mklittlefs .stage.$(1).esptool
+build_done = .stage.$(1).package .stage.$(1).python .stage.$(1).mkspiffs .stage.$(1).mklittlefs .stage.$(1).esptool
 
 define recipe_done
 .stage.$(1).done: $(call build_done,$(1))
@@ -1452,6 +1452,7 @@ install: .stage.LINUX.done
 	$(MAKE) .arduino.checkout
 	$(MAKE) .arduino.toolchain
 	$(MAKE) .arduino.hal
+	$(MAKE) .arduino.python
 	$(MAKE) .arduino.package-template-json
 	$(MAKE) .arduino.build
 	touch $@
@@ -1503,21 +1504,27 @@ python-$(2)_URL := $(call python_url,$(2),.tar.gz)
 python-$(2)_VER := $(PYTHON_VERSION)
 python-$(2)_DIR := $(call __python_dir,$(1))
 
+.arduino.python: .stage.$(1).python
+
 .stage.$(1).python: .package.python-$(2).unpack
 
 .stage.$(1).python-info: .package.python-$(2).info
 
+.package.info: .package.python-$(2).info
+
 .package.python-$(2).unpack: .package.python-$(2).fetch
 	echo STAGE: $$@
-	rm -rf $$(REPODIR)/$$(call pkgdir,$$@)
-	mkdir -p $$(REPODIR)/$$(call pkgdir,$$@)
+	rm -rf \
+		tmp.$$(REPODIR)/$$(call pkgdir,$$@) \
+		$$(REPODIR)/$$(call pkgdir,$$@)
+	mkdir -p $$(REPODIR)/tmp.$$(call pkgdir,$$@)
 	# unique top-dir for otherwise similarly structured archives
 	# nb. there is --transform, but it is very precious with symlinks
-	(cd $$(REPODIR)/$$(call pkgdir,$$@) \
-		&& tar xf ../$$(call pkgarchive,$$@) \
+	(cd $$(REPODIR)/tmp.$$(call pkgdir,$$@) \
+		&& tar xf $$(REPODIR)/$$(call pkgarchive,$$@) \
 		&& test -d python/ && test ! -d python/python \
-		&& mv python/* ./ \
-		&& rm -rf python )
+		&& mv python/ $$(REPODIR)/$$(call pkgdir,$$@) )
+	rm -rf $$(REPODIR)/tmp.$$(call pkgdir,$$@)
 
 endef
 
@@ -1538,13 +1545,15 @@ $(eval $(call python_package,MACOSARM,aarch64-apple-darwin))
 PYTHON_VIA_ENV_STAGES := $(patsubst %,.stage.%.python-via-env,$(PYTHON_VIA_ENV_TARGETS))
 
 $(PYTHON_VIA_ENV_STAGES):
+	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
-	(tarball=$(call host,$@).python-via-env.$(call tarext,$@) \
+	(tarball=$(call host,$@)-python-via-env.$(call tarext,$@) \
+		&& rm -vf $$tarball \
 	    && cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& mkdir -p python3 \
 		&& touch python3/placeholder_for_arduino \
-		&& cp -v $(PWD)/python_via_env.py ./python3 \
-		&& chmod +x ./python3 \
+		&& cp -v $(PWD)/python_via_env.py python3/python3 \
+		&& chmod +x python3/python3 \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
 		&& cd $(PKGDIR) \
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
@@ -1567,9 +1576,11 @@ $(foreach target,$(PYTHON_VIA_ENV_TARGETS),$(eval $(call python_via_env,$(target
 	echo STAGE: $@
 	(cd $(REPODIR)/$(call python_dir,$@) \
 		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py ./ )
+	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
-	(tarball=$(call host,$@).python.$(call tarext,$@) \
-	    && cd $(PKGDIR)/pkg.python.$(call arch,$@) \
+	(tarball=$(call host,$@)-python.$(call tarext,$@) \
+		&& rm -vf $$tarball \
+		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& cp -r $(REPODIR)/$(call python_dir,$@) ./python3 \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
 		&& cd $(PKGDIR) \

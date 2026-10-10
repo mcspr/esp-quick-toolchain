@@ -150,10 +150,10 @@ if __name__ == "__main__":
 
     for p in handler.prune:
         print(f"Removing {p}")
-        if p.is_dir():
+        if p.is_dir(follow_symlinks=False)
             shutil.rmtree(p, ignore_errors=True)
         else:
-            p.unlink()
+            p.unlink(missing_ok=True)
 
     print(f"Site override {handler.output_pth}")
     handler.output_pth.write_text(handler.output_pth_contents)
