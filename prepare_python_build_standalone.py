@@ -9,26 +9,27 @@ from typing import Optional
 
 # ref. emscripten/wasm_assets.py
 # note that site data vars are already portable
-IGNORE_NAMES = (
-    "lib-dynload",  # dynamic libs, currently unused
+PYZIPFILE_IGNORE_NAMES = (
+    "lib-dynload",  # platform specific libraries
     "site-packages",  # standalone builds ship w/ pip
     "ensurepip",  # strip builtin getter as well
     "turtledemo",
-    "__pycache__",
 )
 
-OUTPUT_ZIP_NAME = f"python{sys.version_info.major}{sys.version_info.minor}.zip"
-OUTPUT_PTH_NAME = f"python{sys.version_info.major}{sys.version_info.minor}._pth"
-OUTPUT_PTH_LINES = (
-    OUTPUT_ZIP_NAME,
-    ".",
+UNUSED_DIRS = (
+    "include",  # development headers
+    "share",  # manpages
+)
+
+PTH_TAIL = (
     "",
     "# Uncomment to run site.main() automatically",
     "#import site",
     "",
 )
 
-LIB_DIR_NAME = f"python{sys.version_info.major}.{sys.version_info.minor}"
+STDLIB_DIR = f"python{sys.version_info.major}.{sys.version_info.minor}"
+STDLIB_ZIP = f"python{sys.version_info.major}{sys.version_info.minor}.zip"
 
 
 class Windows:
@@ -39,6 +40,9 @@ class Windows:
     def __init__(self, root: pathlib.Path):
         self.root = root
 
+    def __repr__(self):
+        return f"Windows<{self.root}>"
+
     @property
     def entrypoint(self) -> pathlib.Path:
         return self.root / "python.exe"
@@ -48,62 +52,80 @@ class Windows:
         return self.root / "Lib"
 
     @property
-    def output_zip(self) -> pathlib.Path:
-        return self.root / OUTPUT_ZIP_NAME
+    def stdlib_zip(self) -> pathlib.Path:
+        return self.root / STDLIB_ZIP
+
+    # windows named either w/o version OR w/ dot-less version (same as .zip)
+    @property
+    def pth_file(self) -> pathlib.Path:
+        return (
+            self.root / f"python{sys.version_info.major}{sys.version_info.minor}._pth"
+        )
 
     @property
-    def output_pth(self) -> pathlib.Path:
-        return self.root / OUTPUT_PTH_NAME
-
-    @property
-    def output_pth_contents(self) -> str:
-        out = list(OUTPUT_PTH_LINES)
-        out.insert(1, "DLLs")
+    def pth_contents(self) -> str:
+        out = []
+        out.append(f"./{self.stdlib_zip}")
+        out.append("./DLLs")
+        out.append(".")
+        out.extend(PTH_TAIL)
         return "\n".join(out)
-
-    @property
-    def prune(self):
-        return [
-            self.root / "Lib",
-            self.root / "include",
-        ]
 
 
 class Generic:
     def __init__(self, root: pathlib.Path):
         self.root = root
 
+    def __repr__(self):
+        return f"Generic<{self.root}>"
+
     @property
     def entrypoint(self) -> pathlib.Path:
         return self.root / "python3"
 
     @property
+    def bindir(self) -> pathlib.Path:
+        return self.root / "bin"
+
+    @property
     def bindir_entrypoint(self) -> pathlib.Path:
-        return self.root / "bin" / "python3"
+        return self.bindir / "python3"
+
+    @property
+    def libdir(self) -> pathlib.Path:
+        return self.root / "lib"
 
     @property
     def stdlib_dir(self) -> pathlib.Path:
-        return self.root / "lib" / LIB_DIR_NAME
+        return self.libdir / STDLIB_DIR
 
     @property
-    def output_zip(self) -> pathlib.Path:
-        return self.root / "lib" / OUTPUT_ZIP_NAME
+    def stdlib_zip(self) -> pathlib.Path:
+        return self.libdir / STDLIB_ZIP
+
+    # ref. getpath.py, and make sure its name matches python MAJOR DOT MINOR
+    # "adjacent to the main DLL/dylib/so (if set) OR adjacent to the original executable"
+    @property
+    def pth_file(self) -> pathlib.Path:
+        return (
+            self.bindir
+            / f"python{sys.version_info.major}.{sys.version_info.minor}._pth"
+        )
 
     @property
-    def output_pth(self) -> pathlib.Path:
-        return self.root / "lib" / OUTPUT_PTH_NAME
+    def pth_contents(self) -> str:
+        out = []
+        out.append(f"../lib/{self.stdlib_zip.name}")
+        out.append(f"../lib/python{sys.version_info.major}.{sys.version_info.minor}")
+        out.extend(PTH_TAIL)
+        return "\n".join(out)
 
-    @property
-    def output_pth_contents(self) -> str:
-        return "\n".join(OUTPUT_PTH_LINES)
 
-    @property
-    def prune(self):
-        return [
-            self.root / "lib" / LIB_DIR_NAME,
-            self.root / "share",
-            self.root / "include",
-        ]
+def remove_path(p: pathlib.Path):
+    if p.is_dir(follow_symlinks=False):
+        shutil.rmtree(p, ignore_errors=True)
+    else:
+        p.unlink(missing_ok=True)
 
 
 if __name__ == "__main__":
@@ -112,7 +134,7 @@ if __name__ == "__main__":
     parser.add_argument("root", type=pathlib.Path)
     args = parser.parse_args()
 
-    root: pathlib.Path = args.root
+    root: pathlib.Path = args.root.resolve()
     if not root.exists():
         raise ValueError(f"{root} does not exist")
 
@@ -120,43 +142,62 @@ if __name__ == "__main__":
         raise ValueError(f"{root} not a dir")
 
     handler = Windows(root) if Windows.probe(root) else Generic(root)
-    output_zip = handler.output_zip
+    print(f"Starting {handler}")
 
+    stdlib_zip = handler.stdlib_zip
     if handler.stdlib_dir.exists():
-        if output_zip.exists():
-            print(f"Remove existing {output_zip}")
-            output_zip.unlink()
+        if stdlib_zip.exists():
+            print(f"Remove existing {stdlib_zip}")
+            stdlib_zip.unlink()
 
-        ignore_paths = {(handler.stdlib_dir / name).resolve() for name in IGNORE_NAMES}
+        ignore_paths = {
+            (handler.stdlib_dir / name).resolve() for name in PYZIPFILE_IGNORE_NAMES
+        }
 
         def filterfunc(s: str) -> bool:
             p = pathlib.Path(s).resolve()
             return p not in ignore_paths
 
+        pending_removal: list[pathlib.Path] = []
+
         with zipfile.PyZipFile(
-            output_zip, mode="w", compression=zipfile.ZIP_DEFLATED
+            stdlib_zip, mode="w", compression=zipfile.ZIP_DEFLATED
         ) as zip_archive:
             if zip_archive.compresslevel is not None:
                 zip_archive.compresslevel = 9
             for p in sorted(handler.stdlib_dir.iterdir()):
                 p = p.resolve()
-                if p.name == "__pycache__":
+
+                # keep in the search path for Generic
+                if p.name == "lib-dynload":
                     continue
 
+                # .zip contains .pyc
+                if p.name == "__pycache__":
+                    pending_removal.append(p)
+                    continue
+
+                # process everything else and prune afterwards
                 if p.is_dir() or p.suffix == ".py":
                     zip_archive.writepy(p, filterfunc=filterfunc)
+                    pending_removal.append(p)
 
-        print(f"Packaged {output_zip}")
+        print(f"Prepared {stdlib_zip}")
 
-    for p in handler.prune:
-        print(f"Removing {p}")
-        if p.is_dir(follow_symlinks=False)
-            shutil.rmtree(p, ignore_errors=True)
-        else:
-            p.unlink(missing_ok=True)
+        for p in pending_removal:
+            remove_path(p)
 
-    print(f"Site override {handler.output_pth}")
-    handler.output_pth.write_text(handler.output_pth_contents)
+        if len(list(handler.stdlib_dir.iterdir())) == 0:
+            print(f"Removing empty directory {p}")
+            remove_path(handler.stdlib_dir)
+
+    unused_paths = {(root / name).resolve() for name in UNUSED_DIRS}
+    for p in unused_paths:
+        print(f"Removing unused directory {p}")
+        remove_path(p)
+
+    print(f"Site override {handler.pth_file}")
+    handler.pth_file.write_text(handler.pth_contents)
 
     bindir_entrypoint: Optional[pathlib.Path] = getattr(
         handler, "bindir_entrypoint", None
