@@ -192,7 +192,7 @@ esptool_BRANCH := f80ae31d3b99eee41bd6a7fe6fdf4f889c1dc59b
 PACKAGES := gmp isl libexpat mpc mpfr ncurses
 
 # GNU GDB & the rest of external dependencies which are used for binutils and gcc builds
-isl_VER := ISL_VER
+isl_VER := $(ISL_VER)
 isl_URL := https://gcc.gnu.org/pub/gcc/infrastructure/isl-$(isl_VER).tar.bz2
 isl_DIR := isl-$(isl_VER)
 
