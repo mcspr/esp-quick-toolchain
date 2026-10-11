@@ -628,7 +628,7 @@ setenv_cross = export \
 # Package version **must** conform with Semantic Versioning specicfication:
 # - https://github.com/platformio/platformio-core/issues/3612
 # - https://semver.org/
-PACKAGE_JSON_VERSION := 0.$(GCC_PKGREL).$(STAMP)
+PACKAGE_JSON_VERSION := 0.$(GCC_PKGREL).$(STAMP)+git$(REV)
 
 # 1) package name 2) package desc 3) package architecture(s)
 # multiple architectures expected to be passed as a simple words list
@@ -683,7 +683,7 @@ linux default: .stage.LINUX.done
 
 download: .stage.checkout .stage.fetch
 
-build_done = .stage.$(1).package .stage.$(1).python .stage.$(1).mkspiffs .stage.$(1).mklittlefs .stage.$(1).esptool
+build_done = .stage.$(1).package .stage.$(1).mkspiffs .stage.$(1).mklittlefs .stage.$(1).esptool
 
 define recipe_done
 .stage.$(1).done: $(call build_done,$(1))
@@ -828,9 +828,14 @@ pkgurl = $(call __pkgurl,$(call stem,$(1)))
 __pkgver = $(if $($(1)_VER),$($(1)_VER),$(error no package version for $(1)))
 pkgver = $(call __pkgver,$(call stem,$(1)))
 
+# expected output directory, should exist after recipe completes
 __pkgdir = $(if $($(1)_DIR),$($(1)_DIR),$(error no package dir for $(1)))
 pkgdir = $(call __pkgdir,$(call stem,$(1)))
 
+# package top directory is not the same as the expected one, make sure to rename it
+pkgtopdir = $($(call stem,$(1))_TOPDIR)
+
+# note that current url schemes allow to extract it directly from the path
 __pkgarchive = $(lastword $(subst /, ,$(call __pkgurl,$(1))))
 pkgarchive = $(call __pkgarchive,$(call stem,$(1)))
 
@@ -845,6 +850,7 @@ pkgext = $(call __pkgext,$(call stem,$(1)))
 	@echo '  "url": "$(call pkgurl,$@)"',
 	@echo '  "version": "$(call pkgver,$@)"',
 	@echo '  "dir": "$(REPODIR)/$(call pkgdir,$@)"',
+	@echo '  "topdir": "$(REPODIR)/$(or $(call pkgtopdir,$@),$(call pkgdir,$@))"',
 	@echo '  "archive": "$(REPODIR)/$(call pkgarchive,$@)"',
 	@echo '  "extension": "$(call pkgext,$@)" }'
 
@@ -862,6 +868,9 @@ PACKAGES_INFO = $(patsubst %,.package.%.info,$(PACKAGES))
 	mkdir -p $(REPODIR)/
 	test -r $(REPODIR)/$(call pkgarchive,$@)
 	rm -rf $(REPODIR)/$(call pkgdir,$@)
+	if [ -n "$(call pkgtopdir,$@)" ]; then \
+		rm -rf $(REPODIR)/$(call pkgtopdir,$@); \
+	fi
 	(cd $(REPODIR) && \
 		archive="$(call pkgarchive,$@)"; \
 		ext="$(call pkgext,$@)"; \
@@ -870,6 +879,9 @@ PACKAGES_INFO = $(patsubst %,.package.%.info,$(PACKAGES))
 			(.zip) unzip -qu $$archive ;; \
 			(*) echo "-ERROR Unknown archive type"; exit 1 ;; \
 		esac && echo "UNPACKED $$archive")
+	if [ -n "$(call pkgtopdir,$@)" ]; then \
+		mv -v $(REPODIR)/$(call pkgtopdir,$@) $(REPODIR)/$(call pkgdir,$@); \
+	fi
 	test -d $(REPODIR)/$(call pkgdir,$@)
 
 FETCH_PACKAGES = $(patsubst %,.package.%.unpack,$(PACKAGES))
@@ -1490,19 +1502,13 @@ __asys_python = $(if $($(1)_ASYS),$($(1)_ASYS),$(error no asys defined for $(1))
 __python_dir = python-$(call __asys_python,$(1))-$(PYTHON_VERSION)
 python_dir = $(call __python_dir,$(call arch,$(1)))
 
-# xxx: initial state and side-effect of python_package macro below
-PYTHON_VIA_ENV_TARGETS := $(BUILD_TARGETS)
-
 define python_package
-
-ifneq ($(1),LINUX)
-PYTHON_VIA_ENV_TARGETS := $$(filter-out $(1),$$(PYTHON_VIA_ENV_TARGETS))
-endif
 
 $(1)_PYTHON := $(2)
 python-$(2)_URL := $(call python_url,$(2),.tar.gz)
 python-$(2)_VER := $(PYTHON_VERSION)
 python-$(2)_DIR := $(call __python_dir,$(1))
+python-$(2)_TOPDIR := python
 
 .arduino.python: .stage.$(1).python
 
@@ -1511,20 +1517,6 @@ python-$(2)_DIR := $(call __python_dir,$(1))
 .stage.$(1).python-info: .package.python-$(2).info
 
 .package.info: .package.python-$(2).info
-
-.package.python-$(2).unpack: .package.python-$(2).fetch
-	echo STAGE: $$@
-	rm -rf \
-		tmp.$$(REPODIR)/$$(call pkgdir,$$@) \
-		$$(REPODIR)/$$(call pkgdir,$$@)
-	mkdir -p $$(REPODIR)/tmp.$$(call pkgdir,$$@)
-	# unique top-dir for otherwise similarly structured archives
-	# nb. there is --transform, but it is very precious with symlinks
-	(cd $$(REPODIR)/tmp.$$(call pkgdir,$$@) \
-		&& tar xf $$(REPODIR)/$$(call pkgarchive,$$@) \
-		&& test -d python/ && test ! -d python/python \
-		&& mv python/ $$(REPODIR)/$$(call pkgdir,$$@) )
-	rm -rf $$(REPODIR)/tmp.$$(call pkgdir,$$@)
 
 endef
 
@@ -1540,14 +1532,19 @@ $(eval $(call python_package,MACOSARM,aarch64-apple-darwin))
 
 .PHONY: .stage.%.python .stage.%.python-via-env .stage.%.python-info
 
-# if not explicitly set above, other targets expect system python / pointed to through environment var
+# if not explicitly set above, other targets expect
+# 1) system python being available i.e. /usr/bin/env python3
+# 2) system python being able to execute our script
+# later branches to either executing our other scripts through it, or using a different path set through environment variable
 # ref. python_via_env.py
+PYTHON_VIA_ENV_TARGETS := $(filter-out WIN32 WIN64 MACOSX86 MACOSARM,$(BUILD_TARGETS))
+
 PYTHON_VIA_ENV_STAGES := $(patsubst %,.stage.%.python-via-env,$(PYTHON_VIA_ENV_TARGETS))
 
 $(PYTHON_VIA_ENV_STAGES):
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
-	(tarball=$(call host,$@)-python-via-env.$(call tarext,$@) \
+	(tarball=$(call host,$@).python-via-env.$(call tarext,$@) \
 		&& rm -vf $(PKGDIR)/$$tarball \
 	    && cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& mkdir -p python3 \
@@ -1578,8 +1575,8 @@ $(foreach target,$(PYTHON_VIA_ENV_TARGETS),$(eval $(call python_via_env,$(target
 		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py ./ )
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
-	(tarball=$(call host,$@)-python.$(call tarext,$@) \
-		&& rm -vf $(PKGDIR)/$$tarball \
+	(tarball=$(call host,$@).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE).$(call tarext,$@) \
+		&& rm -vf $(PKGDIR)/$(call host,$@).python-* \
 		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& cp -r $(REPODIR)/$(call python_dir,$@) ./python3 \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
