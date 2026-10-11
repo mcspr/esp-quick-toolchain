@@ -1085,6 +1085,10 @@ endif
 # only host toolchain cross has to have these
 .stage.%.ncurses-progs:
 	echo STAGE: $@
+	($(call setenv_cross,$@) \
+		&& export crosspath="$(call cross,.stage.LINUX.ncurses-progs)" \
+		&& test "$$(command -v tic)" = "$$crosspath/bin/tic" \
+		&& test "$$(command -v infocmp)" = "$$crosspath/bin/infocmp" )
 	touch $@
 
 .stage.LINUX.ncurses-progs:
