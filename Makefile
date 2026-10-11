@@ -209,7 +209,7 @@ mpc_URL := https://gcc.gnu.org/pub/gcc/infrastructure/mpc-$(mpc_VER).tar.gz
 mpc_DIR := mpc-$(mpc_VER)
 
 # libexpat release tagging works a bit weird
-libexpat_VER := 2.8.5
+libexpat_VER := 2.9.0
 libexpat_REV := R_$(subst .,_,$(libexpat_VER))
 libexpat_URL := https://github.com/libexpat/libexpat/releases/download/$(libexpat_REV)/expat-$(libexpat_VER).tar.bz2
 libexpat_DIR := expat-$(libexpat_VER)
@@ -720,7 +720,7 @@ define make_phony_first_recipe
 
 $(1):
 	$(MAKE) .stage.patch
-	$(MAKE) .clean.$(1).cross .clean.LINUX.cross
+	$(MAKE) .clean.$(1).cross
 	$(call make_done_recipe,$(1))
 
 endef
