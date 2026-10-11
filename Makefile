@@ -331,6 +331,17 @@ MACOSX86_CONFIGURE_FLAGS := \
 	CC=$(MACOSX86_CC) \
 	CXX=$(MACOSX86_CXX)
 
+# 3. bump default deployment target from 10.9 to 10.13, to fix at least one instance of syscall incompatibility
+#    alternative would be to keep the original target and to hide `utimensat` through `./configure ac_cv_func_utimensat=no ...`
+#    since ./configure function detection does not care about SDK target warnings
+#    (nb. MACOSARM SDK target is already higher than 10.13)
+# >   CC       rename.o
+# > /workdir/repo/binutils-gdb-gnu/binutils/rename.c:176:12: error: 'utimensat' is only available on macOS 10.13 or newer [-Werror,-Wunguarded-availability-new]
+# >  result = utimensat (AT_FDCWD, destination, times, 0);
+# >           ^~~~~~~~~
+MACOSX86_SETENV := \
+	MACOSX_DEPLOYMENT_TARGET="10.13"
+
 MACOSARM_HOST   := aarch64-apple-darwin20.4
 MACOSARM_AHOST  := arm64-apple-darwin
 MACOSARM_EXT    := .macosarm
@@ -341,7 +352,7 @@ MACOSARM_TAROPT := zcf
 MACOSARM_TAREXT := tar.gz
 MACOSARM_ASYS   := darwin_arm64
 
-# 3. strip cannot happen
+# 4. strip cannot happen, some build scripts forcibly remove signature data
 # > aarch64-apple-darwin20.4-strip: warning: changes being made to the file will invalidate the code signature in ...
 MACOSARM_CC := $(MACOSARM_HOST)-cc
 MACOSARM_CXX := $(MACOSARM_HOST)-c++
@@ -381,6 +392,9 @@ endif
 # For platformio package.json
 asys    = $($(call arch,$(1))_ASYS)
 tarball = $(call host,$(1)).$(TARGET_ARCH)-$(REV).$(STAMP).$(call tarext,$(1))
+
+# sometimes called for setenv
+archsetenv = $($(call arch,$(1))_SETENV)
 
 # sometimes called for ./configure
 configure_flags = $($(call arch,$(1))_CONFIGURE_FLAGS)
@@ -605,6 +619,7 @@ SHARED_PATH_BIN := $(call cross,.stage.LINUX.stage)/bin:$(call install,.stage.LI
 # PATH allows both target cross/ tools and host tools built within the context of cross/
 # PKG_CONFIG_... should prevent host system pollution while building & installing packages for cross/
 setenv = export \
+	$(call archsetenv,$(1)) \
 	CFLAGS_FOR_TARGET="$(CFFT)" \
 	CXXFLAGS_FOR_TARGET="$(CFFT)" \
 	CFLAGS="$(call cflags,$(1)) $(SHARED_OPT_FLAGS) $${CFLAGS}" \
