@@ -231,7 +231,8 @@ ifeq ($(GCC_MAJOR), 4)
 endif
 
 # LTO doesn't work on 4.8, may not be useful later
-LTO := $(if $(lto),$(lto),false)
+lto ?= false
+LTO := $(or $(lto),false)
 
 # Currently supported targets
 BUILD_TARGETS := LINUX LINUX32 ARM64 RPI WIN64 WIN32 MACOSARM MACOSX86
@@ -681,13 +682,13 @@ endef
 .PHONY: linux
 linux default: .stage.LINUX.done
 
-.PRECIOUS: .stage.% .stage.%.%
+.PRECIOUS: .stage.%
 
-.PHONY: .clean.% .clean.%.%
+.PHONY: .clean.%
 
-.PHONY: .git.% .git.%.%
+.PHONY: .git.%
 
-.PHONY: .package.% .package.%.%
+.PHONY: .package.%
 
 .PHONY: .stage.patch .stage.fetch .stage.checkout
 
@@ -720,6 +721,8 @@ define make_done_recipe
 endef
 
 BUILD_TARGETS_WITHOUT_LINUX := $(filter-out LINUX,$(BUILD_TARGETS))
+
+.PHONY: all
 
 all:
 	echo STAGE: $@
@@ -774,6 +777,9 @@ endif
 
 BUILD_CLEAN_TARGETS = $(patsubst %,.clean.%.install-and-arena,$(BUILD_TARGETS))
 STAGE_CLEAN_TARGETS = $(patsubst %,.stage.%.clean,$(BUILD_TARGETS))
+
+.PHONY: clean
+
 clean: $(BUILD_CLEAN_TARGETS) $(STAGE_CLEAN_TARGETS)
 	echo STAGE: $@
 
@@ -992,12 +998,13 @@ $(OVERLAY_CORE_ISA_H): $(LX106_HAL_CORE_ISA_H)
 
 ifneq ($(NOCLEAN),1)
 # Fetch, checkout all git repositories and apply all patches
-PATCH_REPOS = $(patsubst %,.stage.%.patch,$(REPOS))
-.stage.patch: $(PATCH_REPOS) .stage.fetch .stage.checkout
-else
 # DO NOT clear git repos w/ NOCLEAN=1
-.stage.patch:
+FETCH_AND_PATCH = $(patsubst %,.stage.%.patch,$(REPOS)) .stage.fetch .stage.checkout
+else
+FETCH_AND_PATCH =
 endif
+
+.stage.patch: $(FETCH_AND_PATCH)
 	echo STAGE: $@
 
 # DO NOT clear existing cross tree w/ NOCLEAN=1
