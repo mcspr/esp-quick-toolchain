@@ -1,11 +1,6 @@
 # Omit default rule to rebuild itself
 .PHONY: Makefile
 
-# DO NOT hide make output w/ NOSILENT=1
-ifneq ($(NOSILENT),1)
-.SILENT:
-endif
-
 # General rule is that CAPITAL variables are constants and can be used
 # via $(VARNAME), while lowercase variables are dynamic and need to be
 # used via $(call varname,$@) (note no space between comma and $@)
@@ -400,12 +395,12 @@ tarext = $($(call arch,$(1))_TAREXT)
 
 # DO NOT generate log files w/ NOLOG=1
 # expected to be at the end of *some* command printing to stdout/stderr
-ifeq ($(NOLOG),1)
-	log_stage :=
-	log :=
-else
+ifeq ($(NOLOG),)
 	log_stage = > log$(1) 2>&1
 	log = >> log$(1) 2>&1
+else
+	log_stage :=
+	log :=
 endif
 
 # sometimes called for setenv
@@ -751,37 +746,43 @@ endef
 
 # Build all toolchain versions
 
-.PHONY: all
+.PHONY: all .stage.init .stage.clean .stage.git .stage.packages
+
+.stage.git: .git.checkout
+	@echo $@
+
+.stage.packages: .package.unpack
+	@echo $@
+
+.stage.init: .stage.git .stage.packages .stage.patch
+	@echo $@
+
+.stage.clean: $(patsubst %,.stage.%.clean,$(BUILD_TARGETS))
 
 default: all
 
 all:
-	echo STAGE: $@
-	$(MAKE) .stage.patch
-	$(MAKE) $(patsubst %,.stage.%.clean,$(BUILD_TARGETS))
+	$(MAKE) .stage.init $(call log_stage,.stage.init)
+	$(MAKE) .stage.clean $(call log_stage,.stage.clean)
 	$(MAKE) .stage.LINUX.done
 	$(MAKE) $(patsubst %,.stage.%.done,$(filter-out LINUX,$(BUILD_TARGETS)))
 
 .PHONY: LINUX
 
 LINUX:
-	$(MAKE) .stage.patch
+	$(MAKE) .stage.init $(call log_stage,.stage.init)
 	$(MAKE) .stage.LINUX.clean
 	$(MAKE) .stage.LINUX.done
 
-define make_target_recipe
+BUILD_TARGETS_WITHOUT_LINUX := $(filter-out LINUX,$(BUILD_TARGETS))
 
-.PHONY: $(1)
+.PHONY: $(BUILD_TARGETS_WITHOUT_LINUX)
 
-$(1):
-	$(MAKE) .stage.patch
-	$(MAKE) .stage.LINUX.clean .stage.$(1).clean
+$(BUILD_TARGETS_WITHOUT_LINUX):
+	$(MAKE) .stage.init $(call log_stage,.stage.init)
+	$(MAKE) .stage.LINUX.clean .stage.$(@).clean
 	$(MAKE) .stage.LINUX.done
-	$(MAKE) .stage.$(1).done
-
-endef
-
-$(eval $(foreach target,$(filter-out LINUX,$(BUILD_TARGETS)),$(call make_target_recipe,$(target))))
+	$(MAKE) .stage.$(@).done
 
 .PHONY: clean .clean.%.arena .clean.%.install .stage.%.clean
 
@@ -790,14 +791,14 @@ clean:
 # Clean all temporary build and arena directories
 
 .clean.%.arena:
-	echo STAGE: $@
-ifneq ($(NOCLEAN),1)
+	@echo $@
+ifneq ($(NOCLEAN),)
 	rm -rf $(call arena,$@)
 endif
 
 .clean.%.install:
-	echo STAGE: $@
-ifneq ($(NOCLEAN),1)
+	@echo $@
+ifneq ($(NOCLEAN),)
 	rm -rf $(call install,$@)
 endif
 
@@ -805,8 +806,8 @@ endif
 .PHONY: .stage.%.clean
 
 .stage.%.clean: .clean.%.arena .clean.%.install
-	echo STAGE: $@
-ifneq ($(NOCLEAN),1)
+	@echo STAGE: $@
+ifneq ($(NOCLEAN),)
 	rm -vf $(patsubst .stage.%.clean,.stage.%*,$@)
 	rm -vf $(patsubst .stage.%.clean,log.stage.%*,$@)
 	rm -vrf $(PKGDIR)/pkg.*$(call arch,$@)*
@@ -829,10 +830,9 @@ gitdir = $(call __gitdir,$(call stem,$(1)))
 # GIT repos that would be cloned and checked out at the specific branch
 REPOS := gcc binutils newlib lx106-hal mkspiffs mklittlefs esptool
 
-.PHONY: .git.info .git-reset-and-clean .git.%.info .git.%.clone .git.%.reset-and-clean .git.%.checkout
+.PHONY: .git.info .git.%.info .git.%.clone .git-reset-and-clean .git.%.reset-and-clean .git.fetch .git.%.fetch .git.checkout .git.%.checkout
 
-REPOS_INFO = $(patsubst %,.git.%.info,$(REPOS))
-.git.info: $(REPOS_INFO)
+.git.info: $(patsubst %,.git.%.info,$(REPOS))
 
 .git.%.info:
 	@echo '{ "name": "$(call stem,$@)"',
@@ -840,37 +840,46 @@ REPOS_INFO = $(patsubst %,.git.%.info,$(REPOS))
 	@echo '  "branch": "$(call gitbranch,$@)"',
 	@echo '  "dir": "$(REPODIR)/$(call gitdir,$@)" }'
 
-.git.%.clone: .git.%.reset-and-clean
-	echo STAGE: $@
+.git.%.clone:
+	@echo $@
 	mkdir -p $(REPODIR)/
 	(test -d $(REPODIR)/$(call gitdir,$@) \
-		|| git clone --recurse-submodules \
+		|| git clone \
+			--recurse-submodules \
 			--branch $(call gitbranch,$@) \
 			$(call gitrepo,$@) \
 			$(REPODIR)/$(call gitdir,$@) )
 
 # Completely clean out a git directory, removing any untracked files
+.git.reset-and-clean: $(patsubst %,.git.%.reset-and-clean,$(REPOS))
+
 .git.%.reset-and-clean:
-	echo STAGE: $@
-	(test -d $(REPODIR)/$(call gitdir,$@)/.git \
+	@echo $@
+	-(test -d $(REPODIR)/$(call gitdir,$@)/.git \
 		&& cd $(REPODIR)/$(call gitdir,$@) \
 		&& git reset --hard --recurse-submodules \
 		&& git clean -x -f -d )
 
-.git.reset-and-clean: $(patsubst %,.git.%.reset-and-clean,$(REPOS))
-
 clean: .git.reset-and-clean
 
-.git.%.checkout: .git.%.clone
-	echo STAGE: $@
-	(test -d $(REPODIR)/$(call gitdir,$@)/.git \
-		&& cd $(REPODIR)/$(call gitdir,$@) \
+# Sync with the remote and checkout any required branches for existing clone
+.git.pull: $(patsubst %,.git.%.pull,$(REPOS))
+
+.git.%.pull:
+	@echo $@
+	test -d $(REPODIR)/$(call gitdir,$@)/.git
+	(cd $(REPODIR)/$(call gitdir,$@) \
+		&& git checkout $(call gitbranch,$@) \
+		&& git pull --recurse-submodules )
+
+# Checkout any required branches w/o syncing with the remote
+.git.checkout: $(patsubst %,.git.%.checkout,$(REPOS))
+
+.git.%.checkout: $(if $(NOFETCH),,.git.%.clone)
+	@echo $@
+	test -d $(REPODIR)/$(call gitdir,$@)/.git
+	(cd $(REPODIR)/$(call gitdir,$@) \
 		&& git checkout $(call gitbranch,$@) )
-
-# Checkout any required branches
-.PHONY: .stage.checkout
-
-.stage.checkout: $(patsubst %,.git.%.checkout,$(REPOS))
 
 # TODO: tarball support for humongous repos (gcc, binutils, etc.)
 # 		while very useful for development, not so much for just building
@@ -899,9 +908,10 @@ __pkgfullsuffix = $(findstring .tar,$(call __pkgarchive,$(1)))$(call __pkgsuffix
 __pkgext = $(if $(call __pkgfullsuffix,$(1)),$(call __pkgfullsuffix,$(1)),$(error no known archive extension for $(1)))
 pkgext = $(call __pkgext,$(call stem,$(1)))
 
-.PHONY: .package.%.info .package.%.fetch .package.%.unpack .package.%.clean
+.PHONY: .package.info .package.%.info .package.fetch .package.%.fetch .package.unpack .package.%.unpack .package.clean .package.%.clean
 
-# Fetch package urls & unpack archives
+.package.info: $(patsubst %,.package.%.info,$(PACKAGES))
+
 .package.%.info:
 	@echo '{ "name": "$(call stem,$@)",'
 	@echo '  "url": "$(call pkgurl,$@)"',
@@ -911,17 +921,19 @@ pkgext = $(call __pkgext,$(call stem,$(1)))
 	@echo '  "archive": "$(REPODIR)/$(call pkgarchive,$@)"',
 	@echo '  "extension": "$(call pkgext,$@)" }'
 
-PACKAGES_INFO = $(patsubst %,.package.%.info,$(PACKAGES))
-.package.info: $(PACKAGES_INFO)
+# Fetch package urls & unpack archives
+.package.fetch: $(patsubst %,.package.%.fetch,$(PACKAGES))
 
 .package.%.fetch:
-	echo STAGE: $@
+	@echo $@
 	mkdir -p $(REPODIR)/
 	test -r $(REPODIR)/$(call pkgarchive,$@) \
-		|| wget -v -O $(REPODIR)/$(call pkgarchive,$@) $(call pkgurl,$@) $(call log_stage,$@)
+		|| wget -v -O $(REPODIR)/$(call pkgarchive,$@) $(call pkgurl,$@)
 
-.package.%.unpack: .package.%.fetch
-	echo STAGE: $@
+.package.unpack: $(patsubst %,.package.%.unpack,$(PACKAGES))
+
+.package.%.unpack: $(if $(NOFETCH),,.package.%.fetch)
+	@echo $@
 	mkdir -p $(REPODIR)/
 	test -r $(REPODIR)/$(call pkgarchive,$@)
 	rm -rf $(REPODIR)/$(call pkgdir,$@)
@@ -934,24 +946,22 @@ PACKAGES_INFO = $(patsubst %,.package.%.info,$(PACKAGES))
 		case "$$ext" in \
 			(.t*) tar xf $$archive ;; \
 			(.zip) unzip -qu $$archive ;; \
-			(*) echo "-ERROR Unknown archive type"; exit 1 ;; \
-		esac && echo "UNPACKED $$archive")
+			(*) echo "-ERROR Unknown archive type" >&2; exit 1 ;; \
+		esac )
 	if [ -n "$(call pkgtopdir,$@)" ]; then \
 		mv -v $(REPODIR)/$(call pkgtopdir,$@) $(REPODIR)/$(call pkgdir,$@); \
 	fi
 	test -d $(REPODIR)/$(call pkgdir,$@)
 
-.PHONY: .stage.fetch
-
-.stage.fetch: $(patsubst %,.package.%.unpack,$(PACKAGES))
+.package.clean: $(patsubst %,.package.%.clean,$(PACKAGES))
 
 .package.%.clean:
-	echo STAGE: $@
-ifneq ($(NOCLEAN),1)
+	@echo $@
+ifneq ($(NOCLEAN),)
 	-rm -r $(call pkgdir,$@)
 endif
 
-clean: $(patsubst %,.package.%.clean,$(PACKAGES))
+clean: .package.clean
 
 # Checkout and reset, then apply patches to the local GIT repos
 patch = \
@@ -976,29 +986,29 @@ $(OVERLAY_XTENSA_CONFIG_H): $(LX106_HAL_XTENSA_CONFIG_H)
 .PHONY: .stage.%.patch
 
 .stage.gcc.patch: $(OVERLAY_XTENSA_CONFIG_H) .git.gcc.checkout
-	echo STAGE: $@
+	@echo STAGE: $@
 	(cd $(REPODIR)/$(gcc_DIR) && \
 		for p in $(PATCHDIR)/gcc-*.patch $(PATCHDIR)/gcc$(GCC)/gcc-*.patch; do \
 			$(call patch,$$p); \
-		done ) $(call log_stage,$@)
+		done )
 	(cd $(REPODIR)/$(gcc_DIR) \
-		&& cp -v $(OVERLAY_XTENSA_CONFIG_H) include/xtensa-config.h) $(call log,$@)
+		&& cp -v $(OVERLAY_XTENSA_CONFIG_H) include/xtensa-config.h)
 ifeq ($(GCC_MAJOR), 4)
 	# external dependency built as part of the tree
 	(cd $(REPODIR)/$(gcc_DIR) \
 		&& rm -rf cloog \
 		&& ln -sf ../cloog-$(CLOOG_VER) cloog \
-		&& echo " LINK $(gcc_DIR)/cloog <- cloog-$(CLOOG_VER)" ) $(call log,$@)
+		&& echo " LINK $(gcc_DIR)/cloog <- cloog-$(CLOOG_VER)" )
 endif
 
 .stage.binutils.patch: $(OVERLAY_XTENSA_CONFIG_H) .git.binutils.checkout
-	echo STAGE: $@
+	@echo STAGE: $@
 	(cd $(REPODIR)/$(binutils_DIR) && \
 		for p in $(PATCHDIR)/bin-*.patch $(PATCHDIR)/gcc$(GCC)/bin-*.patch; do \
 			$(call patch,$$p); \
-		done ) $(call log_stage,$@)
+		done )
 	(cd $(REPODIR)/$(binutils_DIR) \
-		&& cp -va $(OVERLAY_XTENSA_CONFIG_H) include/xtensa-config.h) $(call log,$@)
+		&& cp -va $(OVERLAY_XTENSA_CONFIG_H) include/xtensa-config.h)
 
 # Recent newlib ships minimal HAL core-isa.h for lx6/lx7 (aka esp32), make sure it is for lx106
 LX106_HAL_CORE_ISA_H := $(REPODIR)/$(lx106-hal_DIR)/include/xtensa/config/core-isa.h
@@ -1022,49 +1032,45 @@ $(OVERLAY_CORE_ISA_H): $(LX106_HAL_CORE_ISA_H)
 clean: .clean.overlay-core-isa-h
 
 .stage.newlib.patch: $(OVERLAY_CORE_ISA_H) .git.newlib.checkout
-	echo STAGE: $@
+	@echo STAGE: $@
 	(cd $(REPODIR)/$(newlib_DIR) && \
 		for p in $(PATCHDIR)/lib-*.patch $(PATCHDIR)/gcc$(GCC)/lib-*.patch; do \
 			$(call patch,$$p); \
-		done ) $(call log_stage,$@)
-	(set -x; cp -va $(OVERLAY_CORE_ISA_H) $(NEWLIB_CORE_ISA_H)) $(call log,$@)
+		done )
+	(set -x; cp -va $(OVERLAY_CORE_ISA_H) $(NEWLIB_CORE_ISA_H))
 
 .stage.lx106-hal.patch: .git.lx106-hal.checkout
-	echo STAGE: $@
 	(cd $(REPODIR)/$(lx106-hal_DIR) && \
 		for p in $(PATCHDIR)/hal-*.patch; do \
 			$(call patch,$$p); \
-		done ) $(call log_stage,$@)
+		done )
 	# HAL Makefile.am was patched above
 	(cd $(REPODIR)/$(lx106-hal_DIR) \
-		&& autoreconf -i ) $(call log,$@)
+		&& autoreconf -i )
 
 .stage.mkspiffs.patch: .git.mkspiffs.checkout
-	echo STAGE: $@
+	@echo STAGE: $@
 	(cd $(REPODIR)/$(mkspiffs_DIR) && \
 		for p in $(PATCHDIR)/mkspiffs/$(mkspiffs_BRANCH)*.patch; do \
 			$(call patch,$$p); \
-		done ) $(call log_stage,$@)
+		done )
 
-.stage.%.patch: .git.%.checkout
-	echo STAGE: $@
+.stage.%.patch:
+	@echo $@
 
 .PHONY: download
 
-download: .stage.fetch .stage.checkout
+download:
+	$(MAKE) .git.clone
+	$(MAKE) .git.pull
+	$(MAKE) .package.fetch
 
-ifneq ($(NOCLEAN),1)
-# Fetch, checkout all git repositories and apply all patches
-# DO NOT clear git repos w/ NOCLEAN=1
-FETCH_AND_PATCH = $(patsubst %,.stage.%.patch,$(REPOS)) .stage.fetch .stage.checkout
-else
-FETCH_AND_PATCH =
-endif
+.PHONY: patch .stage.patch
 
-.PHONY: .stage.patch
+.stage.patch: $(patsubst %,.stage.%.patch,$(REPOS) $(PACKAGES))
+	@echo $@
 
-.stage.patch: $(FETCH_AND_PATCH)
-	echo STAGE: $@
+patch: .stage.patch
 
 # Info about current stage build configuration
 .PHONY: .stage.%.info
@@ -1083,7 +1089,7 @@ endif
 
 # Shared dependency for binutils and gcc
 .stage.%.gmp:
-	echo STAGE: $@
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/gmp $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/gmp $(call log,$@)
 	(cd $(call arena,$@)/gmp \
@@ -1114,7 +1120,7 @@ endif
 
 # isl-0.xx expects gmp prefix as --with-gmp-prefix=... unlike any other ./configure script here
 .stage.%.isl: .stage.%.gmp
-	echo STAGE: $@
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/isl $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/isl $(call log,$@)
 	(cd $(call arena,$@)/isl \
@@ -1128,7 +1134,7 @@ endif
 
 # GDB static build has to have up-to-date libs
 .stage.%.libexpat:
-	echo STAGE: $@
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/libexpat $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/libexpat $(call log,$@)
 	(cd $(call arena,$@)/libexpat \
@@ -1150,6 +1156,7 @@ endif
 
 # todo: since there is no cross-target dependency, ensure that commands generated from LINUX work
 .cross.%.ncurses-progs:
+	@echo $@
 	($(call setenv_cross,$@) \
 		&& export crosspath="$(call cross,.stage.LINUX.ncurses-progs)" \
 		&& test "$$(command -v tic)" = "$$crosspath/bin/tic" \
@@ -1157,6 +1164,7 @@ endif
 
 # only LINUX aka host toolchain cross has to have these
 .cross.LINUX.ncurses-progs:
+	@echo $@
 	rm -rf $(call arena,$@)/ncurses-progs
 	mkdir -p $(call arena,$@)/ncurses-progs
 	(cd $(call arena,$@)/ncurses-progs \
@@ -1168,12 +1176,12 @@ endif
 		&& $(MAKE) install)
 
 .stage.%.ncurses-progs:
-	echo STAGE: $@
+	@echo STAGE: $@
 	$(MAKE) $(subst .stage,.cross,$@) $(call log_stage,$@)
 	touch $@
 
 .stage.%.ncurses: .stage.%.ncurses-progs
-	echo STAGE: $@
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/ncurses $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/ncurses $(call log,$@)
 	(cd $(call arena,$@)/ncurses \
@@ -1192,7 +1200,7 @@ BUILD_CROSS = .stage.%.gmp \
 
 # Build binutils & gdb
 .stage.%.binutils-config: $(BUILD_CROSS)
-	echo STAGE: $@
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/binutils $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/binutils $(call log,$@)
 	(cd $(call arena,$@)/binutils \
@@ -1202,7 +1210,7 @@ BUILD_CROSS = .stage.%.gmp \
 	touch $@
 
 .stage.%.binutils-make: .stage.%.binutils-config
-	echo STAGE: $@
+	@echo STAGE: $@
 	(cd $(call arena,$@)/binutils \
 		&& $(call setenv,$@) \
 		&& $(call setenv_binutils,$@) \
@@ -1218,12 +1226,8 @@ WIN64_DLLEXT := .dll
 dllext = $(or $($(call arch,$(1))_DLLEXT),.so)
 
 .stage.%.binutils-post: .stage.%.binutils-make
-	echo STAGE: $@
-ifeq ($(BINUTILS_BRANCH),master)
-	touch $@
-else ifeq ($(BINUTILS_BRANCH),binutils-2_32)
-	touch $@
-else
+	@echo STAGE: $@
+ifneq ($(filter-out master binutils-2_32,$(BINUTILS_BRANCH)),)
 	rm -rf $(call arena,$@)/binutils/ld $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/binutils/ld $(call log,$@)
 	(cd $(call arena,$@)/binutils/ld \
@@ -1235,11 +1239,11 @@ else
 		&& $(MAKE) \
 		&& cp -v .libs/libdep$(call dllext,$@) \
 			$(call install,$@)/lib/bfd-plugins/ ) $(call log,$@)
-	touch $@
 endif
+	touch $@
 
 .stage.%.gdb-config: $(BUILD_CROSS)
-	echo STAGE: $@
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/gdb $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/gdb $(call log,$@)
 	(cd $(call arena,$@)/gdb \
@@ -1251,7 +1255,7 @@ endif
 	touch $@
 
 .stage.%.gdb-make: .stage.%.gdb-config
-	echo STAGE: $@
+	@echo STAGE: $@
 	(cd $(call arena,$@)/gdb \
 		&& $(call setenv,$@) \
 		&& $(call setenv_binutils,$@) \
@@ -1261,7 +1265,7 @@ endif
 	touch $@
 
 .stage.%.gcc1-config: .stage.%.binutils-post .stage.%.gdb-make
-	echo STAGE: $@
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/$(gcc_DIR) $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/$(gcc_DIR) $(call log,$@)
 	(cd $(call arena,$@)/$(gcc_DIR) \
@@ -1274,7 +1278,7 @@ endif
 	touch $@
 
 .stage.%.gcc1-make: .stage.%.gcc1-config
-	echo STAGE: $@
+	@echo STAGE: $@
 	(cd $(call arena,$@)/$(gcc_DIR) \
 		&& $(call setenv,$@) \
 		&& $(MAKE) all-gcc \
@@ -1286,7 +1290,7 @@ endif
 	touch $@
 
 .stage.%.newlib-config: .stage.%.gcc1-make
-	echo STAGE: $@
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/newlib $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/newlib $(call log,$@)
 	(cd $(call arena,$@)/newlib \
@@ -1298,7 +1302,7 @@ endif
 # generates newlib aka libc and hal installations at the install root
 # even though these don't have to be rebuilt per target, its fairly short and also verifies that the compiler actually works
 .stage.%.newlib-make: .stage.%.newlib-config
-	echo STAGE: $@
+	@echo STAGE: $@
 	(cd $(call arena,$@)/newlib \
 		&& $(call setenv,$@) \
 		&& $(MAKE) \
@@ -1306,7 +1310,7 @@ endif
 	touch $@
 
 .stage.%.hal-config: .stage.%.newlib-make
-	echo STAGE: $@
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/lx106-hal $(call log_stage,$@)
 	mkdir -p $(call arena,$@)/lx106-hal $(call log,$@)
 	# note the CC=... to override possibly injected variable after calling 'configure'
@@ -1321,7 +1325,7 @@ endif
 
 # nb. override prefix to ONLY place hal .a into the target arch directory, don't copy to BOTH system-wide and target
 .stage.%.hal-make: .stage.%.hal-config
-	echo STAGE: $@
+	@echo STAGE: $@
 	(cd $(call arena,$@)/lx106-hal \
 		&& $(call setenv,$@) \
 		&& $(MAKE) && $(MAKE) \
@@ -1331,7 +1335,7 @@ endif
 	touch $@
 
 .stage.%.libstdcpp: .stage.%.hal-make
-	echo STAGE: $@
+	@echo STAGE: $@
 	# stage 2 (build libstdc++)
 	(cd $(call arena,$@)/$(gcc_DIR) \
 		&& $(call setenv,$@) \
@@ -1339,7 +1343,7 @@ endif
 	touch $@
 
 .stage.%.libstdcpp-nox: .stage.%.libstdcpp
-	echo STAGE: $@
+	@echo STAGE: $@
 	# We copy existing stdc, adjust the makefile, and build a single .a to save much time
 	rm -rf $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox $(call log_stage,$@)
 	(cd $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH) \
@@ -1355,12 +1359,12 @@ endif
 	touch $@
 
 .stage.%.strip: .stage.%.libstdcpp-nox
-	echo STAGE: $@
+	@echo STAGE: $@
 	$(MAKE) .tool.$(call arch,$@).toolchain-strip $(call log_stage,$@)
 	touch $@
 
 .stage.%.post: .stage.%.strip
-	echo STAGE: $@
+	@echo STAGE: $@
 	for sh in $(POSTDIR)/gcc$(GCC)-*.sh $(POSTDIR)/gcc$(GCC_MAJOR)-*.sh; do \
 	    [ -x "$${sh}" ] || continue ; \
 		(set -x; $${sh} $(call ext,$@)) ; \
@@ -1386,7 +1390,7 @@ package-json: .tool.LINUX.toolchain-package-json
 .tool.%.toolchain-package-json: TOOL_PKGREL=$(PKGREL)
 
 .tool.%.toolchain-package-json: | .stage.%.done
-	echo STAGE: $@
+	@echo $@
 	(cd $(call install,$@) \
 		&& $(call make_package_json,$(TOOL_NAME),$(TOOL_DESC),$(TOOL_PKGREL),$(call asys,$@)) )
 
@@ -1396,6 +1400,7 @@ package-json: .tool.LINUX.toolchain-package-json
 .PHONY: .tool.%.toolchain-strip
 
 .tool.%.toolchain-strip:
+	@echo $@
 	# manual workaround since we havent done `make install-strip` OR used $(STRIPPROG)
 	# note that autotools-enabled ./configure scripts `install` SHOULD honor $$STRIP from environment
 	($(call setenv_cross,$@) \
@@ -1412,7 +1417,7 @@ package-json: .tool.LINUX.toolchain-package-json
 # prepare full toolchain archive including binutils + gdb + gcc + newlib
 # recipe only has to copy staged build result from the target install dir
 .tool.%.toolchain: | .tool.%.toolchain-package-json .stage.%.done
-	echo STAGE: $@
+	@echo $@
 	# both arduino & platformio share package archive structure with $(TARGET_ARCH) as root
 	mkdir -p $(PKGDIR)
 	rm -rf $(PKGDIR)/pkg.gcc.$(call arch,$@)
@@ -1474,7 +1479,7 @@ endef
 .tool.%.mkspiffs: TOOL_DIR=$(mkspiffs_DIR)
 
 .tool.%.mkspiffs:
-	echo STAGE: $@
+	@echo $@
 	$(tool-build)
 	$(tool-package)
 	touch $@
@@ -1486,7 +1491,7 @@ endef
 .tool.%.mklittlefs: TOOL_DIR=$(mklittlefs_DIR)
 
 .tool.%.mklittlefs:
-	echo STAGE: $@
+	@echo $@
 	$(tool-build)
 	$(tool-package)
 	touch $@
@@ -1502,7 +1507,7 @@ endef
 .tool.%.esptool: TOOL_DIR=$(esptool_DIR)
 
 .tool.%.esptool:
-	echo STAGE: $@
+	@echo $@
 	$(tool-build)
 	$(tool-package)
 	touch $@
@@ -1533,6 +1538,10 @@ python-$(2)_TOPDIR := python
 .tool.$(1).python-info: .package.python-$(2).info
 
 .package.info: .package.python-$(2).info
+
+.package.fetch: .package.python-$(2).fetch
+
+.package.unpack: .package.python-$(2).unpack
 
 clean: .package.python-$(2).clean
 
@@ -1577,7 +1586,7 @@ $(PYTHON_VIA_ENV_STAGES):
 define python_via_env
 
 .tool.$(1).python: .tool.$(1).python-via-env
-	echo STAGE: $$@
+	@echo $$@
 
 endef
 
@@ -1588,7 +1597,7 @@ $(foreach target,$(PYTHON_VIA_ENV_TARGETS),$(eval $(call python_via_env,$(target
 # 3) ensure root dir is named python3, and there is callable python3/python3(.exe)
 # 4) repackage through tarcmd (TODO arduino-cli or spec really care?)
 .tool.%.python:
-	echo STAGE: $@
+	@echo $@
 	(cd $(REPODIR)/$(call python_dir,$@) \
 		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py ./ )
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
@@ -1605,21 +1614,26 @@ $(foreach target,$(PYTHON_VIA_ENV_TARGETS),$(eval $(call python_via_env,$(target
 .PHONY: .arduino.%
 
 .arduino.checkout:
-	echo "-------- Preparing Arduino repo at $(ARDUINO)"
-	test -d $(ARDUINO) || git clone https://github.com/$(GHUSER)/Arduino $(ARDUINO)
+	@echo "-------- Preparing Arduino repo at $(ARDUINO)"
+	test -d $(ARDUINO) || \
+		git clone \
+			--branch $(INSTALLBRANCH) \
+			--recurse-submodules tools/sdk/ssl \
+			--recurse-submodules tools/sdk/lwip2 \
+			https://github.com/$(GHUSER)/Arduino \
+			$(ARDUINO)
 	(cd $(ARDUINO) \
+		&& git reset --hard --recurse-submodules \
 		&& git clean -x -f -d \
-		&& git fetch origin $(INSTALLBRANCH) \
 		&& git checkout $(INSTALLBRANCH) \
-		&& git submodule init \
-		&& git submodule update)
+		&& git pull --recurse-submodules )
 
 .arduino.tools: tools
 
 ARDUINO_PKGFILE := $(ARDUINO)/package/package_esp8266com_index.template.json
 
 .arduino.package-template-json:
-	echo "-------- Updating package template.json"
+	@echo "-------- Updating package template.json"
 	./patch_json.py \
 		--pkgfile "$(ARDUINO_PKGFILE)" \
 		--tool $(TARGET_ARCH)-gcc \
@@ -1645,13 +1659,13 @@ ARDUINO_PKGFILE := $(ARDUINO)/package/package_esp8266com_index.template.json
 .arduino.build:
 	(cd $(ARDUINO)/tools \
 		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 get.py --tool $(TARGET_ARCH)-gcc )
-	echo "-------- Building and installing BearSSL"
+	@echo "-------- Building and installing BearSSL"
 	(cd $(ARDUINO)/tools/sdk/ssl \
 		&& make clean && make all && make install)
-	echo "-------- Building and installing LWIP2"
+	@echo "-------- Building and installing LWIP2"
 	(cd $(ARDUINO)/tools/sdk/lwip2 \
 		&& make clean && make install)
-	echo "-------- Building eboot.elf"
+	@echo "-------- Building eboot.elf"
 	(cd $(ARDUINO)/bootloaders/eboot \
 		&& make clean && make)
 
@@ -1660,7 +1674,7 @@ ARDUINO_PKGFILE := $(ARDUINO)/package/package_esp8266com_index.template.json
 .PHONY: install
 
 install:
-	echo STAGE: $@
+	@echo $@
 	$(MAKE) .arduino.checkout
 	$(MAKE) .arduino.tools
 	$(MAKE) .arduino.package-template-json
@@ -1671,7 +1685,7 @@ install:
 .PHONY: upload
 
 upload: tools
-	echo STAGE: $@
+	@echo $@
 	rm -rf ./arena.upload
 	mkdir ./arena.upload
 	(cd ./arena.upload \
