@@ -1355,18 +1355,9 @@ endif
 	touch $@
 
 .stage.%.strip: .stage.%.libstdcpp-nox
-	# manual workaround since we havent done `make install-strip` OR used $(STRIPPROG)
-	# note that autotools-enabled ./configure scripts `install` SHOULD honor $$STRIP from environment
-	($(call setenv_cross,$@) \
-		&& $$STRIP \
-			$(call install,$@)/lib/bfd-plugins/* \
-			$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/c*$(call exe,$@) \
-			$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/lto1$(call exe,$@) )
-	# ignore some false-positives from gdb shell scripts
-	($(call setenv_cross,$@) \
-		&& find $(call install,$@)/bin -executable -type f \
-			! -name '$(TARGET_ARCH)-gdb-add-index' -a ! -name '$(TARGET_ARCH)-gstack' \
-			-exec $$STRIP {} \; )
+	echo STAGE: $@
+	$(MAKE) .tool.$(call arch,$@).toolchain-strip $(call log_stage,$@)
+	touch $@
 
 .stage.%.post: .stage.%.strip
 	echo STAGE: $@
@@ -1398,6 +1389,25 @@ package-json: .tool.LINUX.toolchain-package-json
 	echo STAGE: $@
 	(cd $(call install,$@) \
 		&& $(call make_package_json,$(TOOL_NAME),$(TOOL_DESC),$(TOOL_PKGREL),$(call asys,$@)) )
+
+# implicit rule to be used in .stage.%.strip
+# assume .stage.%.done has been done at some point
+
+.PHONY: .tool.%.toolchain-strip
+
+.tool.%.toolchain-strip:
+	# manual workaround since we havent done `make install-strip` OR used $(STRIPPROG)
+	# note that autotools-enabled ./configure scripts `install` SHOULD honor $$STRIP from environment
+	($(call setenv_cross,$@) \
+		&& $$STRIP \
+			$(call install,$@)/lib/bfd-plugins/* \
+			$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/c*$(call exe,$@) \
+			$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/lto1$(call exe,$@) )
+	# ignore some false-positives from gdb shell scripts
+	($(call setenv_cross,$@) \
+		&& find $(call install,$@)/bin -executable -type f \
+			! -name '$(TARGET_ARCH)-gdb-add-index' -a ! -name '$(TARGET_ARCH)-gstack' \
+			-exec $$STRIP {} \; )
 
 # prepare full toolchain archive including binutils + gdb + gcc + newlib
 # recipe only has to copy staged build result from the target install dir
