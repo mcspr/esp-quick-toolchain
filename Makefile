@@ -1350,8 +1350,7 @@ endif
 	(cd $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox \
 		&& $(call setenv,$@) \
 		&& $(MAKE) clean \
-		&& find . -name Makefile -exec sed -i 's/mlongcalls/mlongcalls -fno-exceptions/' \{\} \; \
-		&& $(MAKE)) $(call log,$@)
+		&& $(MAKE) CXXFLAGS="-fno-exceptions $${CXXFLAGS_FOR_TARGET}" ) $(call log,$@)
 	(cd $(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/ \
 		&& cp -v libstdc++.a libstdc++-exc.a \
 		&& cp -v $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a ./) $(call log,$@)
