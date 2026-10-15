@@ -1090,16 +1090,16 @@ patch: .stage.patch
 # Shared dependency for binutils and gcc
 .stage.%.gmp:
 	@echo STAGE: $@
-	rm -rf $(call arena,$@)/gmp $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/gmp $(call log,$@)
+	rm -rf $(call arena,$@)/gmp
+	mkdir -p $(call arena,$@)/gmp
 	(cd $(call arena,$@)/gmp \
 		&& $(call setenv,$@) \
 		&& $(REPODIR)/$(gmp_DIR)/configure \
 			$(call configure_gmp,$@) \
 		&& $(MAKE) \
-		&& $(MAKE) install) $(call log,$@)
-	rm -rf $(call arena,$@)/mpfr $(call log,$@)
-	mkdir -p $(call arena,$@)/mpfr $(call log,$@)
+		&& $(MAKE) install) $(call log_stage,$@)
+	rm -rf $(call arena,$@)/mpfr
+	mkdir -p $(call arena,$@)/mpfr
 	(cd $(call arena,$@)/mpfr \
 		&& $(call setenv,$@) \
 		&& $(REPODIR)/$(mpfr_DIR)/configure \
@@ -1107,8 +1107,8 @@ patch: .stage.patch
 			$(call configure_with_gmp,$@) \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log,$@)
-	rm -rf $(call arena,$@)/mpc $(call log,$@)
-	mkdir -p $(call arena,$@)/mpc $(call log,$@)
+	rm -rf $(call arena,$@)/mpc
+	mkdir -p $(call arena,$@)/mpc
 	(cd $(call arena,$@)/mpc \
 		&& $(call setenv,$@) \
 		&& $(REPODIR)/$(mpc_DIR)/configure \
@@ -1121,22 +1121,22 @@ patch: .stage.patch
 # isl-0.xx expects gmp prefix as --with-gmp-prefix=... unlike any other ./configure script here
 .stage.%.isl: .stage.%.gmp
 	@echo STAGE: $@
-	rm -rf $(call arena,$@)/isl $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/isl $(call log,$@)
+	rm -rf $(call arena,$@)/isl
+	mkdir -p $(call arena,$@)/isl
 	(cd $(call arena,$@)/isl \
 		&& $(call setenv,$@) \
 		&& $(REPODIR)/$(isl_DIR)/configure \
 			$(call configure_cross,$@) \
 			--with-gmp-prefix=$(call arena,$@)/cross \
 		&& $(MAKE) \
-		&& $(MAKE) install) $(call log,$@)
+		&& $(MAKE) install) $(call log_stage,$@)
 	touch $@
 
 # GDB static build has to have up-to-date libs
 .stage.%.libexpat:
 	@echo STAGE: $@
-	rm -rf $(call arena,$@)/libexpat $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/libexpat $(call log,$@)
+	rm -rf $(call arena,$@)/libexpat
+	mkdir -p $(call arena,$@)/libexpat
 	(cd $(call arena,$@)/libexpat \
 		&& $(call setenv,$@) \
 		&& cp -r $(REPODIR)/$(libexpat_DIR)/* ./ \
@@ -1145,7 +1145,7 @@ patch: .stage.patch
 			$(call configure_cross,$@) \
 			$(CONFIGURE_LIBEXPAT) \
 		&& $(MAKE) \
-		&& $(MAKE) install ) $(call log,$@)
+		&& $(MAKE) install ) $(call log_stage,$@)
 	touch $@
 
 # *warning in regards to any other possible target override recipe*
@@ -1182,15 +1182,15 @@ patch: .stage.patch
 
 .stage.%.ncurses: .stage.%.ncurses-progs
 	@echo STAGE: $@
-	rm -rf $(call arena,$@)/ncurses $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/ncurses $(call log,$@)
+	rm -rf $(call arena,$@)/ncurses
+	mkdir -p $(call arena,$@)/ncurses
 	(cd $(call arena,$@)/ncurses \
 		&& $(call setenv_cross,$@) \
 		&& $(REPODIR)/$(ncurses_DIR)/configure \
 			$(call configure_ncurses,$@) \
 			$(NCURSES_CONFIGURE_FLAGS_WITH_FALLBACKS) \
 		&& $(MAKE) \
-		&& $(MAKE) install) $(call log,$@)
+		&& $(MAKE) install) $(call log_stage,$@)
 	touch $@
 
 BUILD_CROSS = .stage.%.gmp \
@@ -1201,12 +1201,12 @@ BUILD_CROSS = .stage.%.gmp \
 # Build binutils & gdb
 .stage.%.binutils-config: $(BUILD_CROSS)
 	@echo STAGE: $@
-	rm -rf $(call arena,$@)/binutils $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/binutils $(call log,$@)
+	rm -rf $(call arena,$@)/binutils
+	mkdir -p $(call arena,$@)/binutils
 	(cd $(call arena,$@)/binutils \
 		&& $(call setenv,$@) \
 		&& $(REPODIR)/$(BINUTILS_DIR)/configure \
-			$(call configure_binutils,$@) ) $(call log,$@)
+			$(call configure_binutils,$@) ) $(call log_stage,$@)
 	touch $@
 
 .stage.%.binutils-make: .stage.%.binutils-config
@@ -1228,8 +1228,8 @@ dllext = $(or $($(call arch,$(1))_DLLEXT),.so)
 .stage.%.binutils-post: .stage.%.binutils-make
 	@echo STAGE: $@
 ifneq ($(filter-out master binutils-2_32,$(BINUTILS_BRANCH)),)
-	rm -rf $(call arena,$@)/binutils/ld $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/binutils/ld $(call log,$@)
+	rm -rf $(call arena,$@)/binutils/ld
+	mkdir -p $(call arena,$@)/binutils/ld
 	(cd $(call arena,$@)/binutils/ld \
 		&& $(call setenv_binutils,$@) \
 		&& $(REPODIR)/$(BINUTILS_DIR)/ld/configure \
@@ -1238,20 +1238,20 @@ ifneq ($(filter-out master binutils-2_32,$(BINUTILS_BRANCH)),)
 			--enable-shared \
 		&& $(MAKE) \
 		&& cp -v .libs/libdep$(call dllext,$@) \
-			$(call install,$@)/lib/bfd-plugins/ ) $(call log,$@)
+			$(call install,$@)/lib/bfd-plugins/ ) $(call log_stage,$@)
 endif
 	touch $@
 
 .stage.%.gdb-config: $(BUILD_CROSS)
 	@echo STAGE: $@
-	rm -rf $(call arena,$@)/gdb $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/gdb $(call log,$@)
+	rm -rf $(call arena,$@)/gdb
+	mkdir -p $(call arena,$@)/gdb
 	(cd $(call arena,$@)/gdb \
 		&& $(call setenv,$@) \
 		&& $(call setenv_binutils,$@) \
 		&& $(call setenv_gdb,$@) \
 		&& $(REPODIR)/$(BINUTILS_DIR)/configure \
-			$(call configure_gdb,$@) ) $(call log,$@)
+			$(call configure_gdb,$@) ) $(call log_stage,$@)
 	touch $@
 
 .stage.%.gdb-make: .stage.%.gdb-config
@@ -1266,15 +1266,15 @@ endif
 
 .stage.%.gcc1-config: .stage.%.binutils-post .stage.%.gdb-make
 	@echo STAGE: $@
-	rm -rf $(call arena,$@)/$(gcc_DIR) $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/$(gcc_DIR) $(call log,$@)
+	rm -rf $(call arena,$@)/$(gcc_DIR)
+	mkdir -p $(call arena,$@)/$(gcc_DIR)
 	(cd $(call arena,$@)/$(gcc_DIR) \
 		&& $(call setenv,$@) \
 		&& $(REPODIR)/$(gcc_DIR)/configure \
 			$(CONFIGURE_EH_POOL) \
 			$(call configure_with_gmp,$@) \
 			$(call configure_with_isl,$@) \
-			$(call configure_target,$@) ) $(call log,$@)
+			$(call configure_target,$@) ) $(call log_stage,$@)
 	touch $@
 
 .stage.%.gcc1-make: .stage.%.gcc1-config
@@ -1282,21 +1282,20 @@ endif
 	(cd $(call arena,$@)/$(gcc_DIR) \
 		&& $(call setenv,$@) \
 		&& $(MAKE) all-gcc \
-		&& $(MAKE) install-gcc) $(call log_stage,$@)
-	(cd $(call install,$@)/bin \
-		&& ln -sf \
-			$(TARGET_ARCH)-gcc$(call exe,$@) \
-			$(TARGET_ARCH)-cc$(call exe,$@)) $(call log,$@)
+		&& $(MAKE) install-gcc \
+		&& cd $(call install,$@)/bin  \
+		&& ln -sf $(TARGET_ARCH)-gcc$(call exe,$@) \
+			$(TARGET_ARCH)-cc$(call exe,$@) ) $(call log_stage,$@)
 	touch $@
 
 .stage.%.newlib-config: .stage.%.gcc1-make
 	@echo STAGE: $@
-	rm -rf $(call arena,$@)/newlib $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/newlib $(call log,$@)
+	rm -rf $(call arena,$@)/newlib
+	mkdir -p $(call arena,$@)/newlib
 	(cd $(call arena,$@)/newlib \
 		&& $(call setenv,$@) \
 		&& $(REPODIR)/$(newlib_DIR)/configure \
-			$(call configure_newlib,$@)) $(call log,$@)
+			$(call configure_newlib,$@)) $(call log_stage,$@)
 	touch $@
 
 # generates newlib aka libc and hal installations at the install root
@@ -1311,8 +1310,8 @@ endif
 
 .stage.%.hal-config: .stage.%.newlib-make
 	@echo STAGE: $@
-	rm -rf $(call arena,$@)/lx106-hal $(call log_stage,$@)
-	mkdir -p $(call arena,$@)/lx106-hal $(call log,$@)
+	rm -rf $(call arena,$@)/lx106-hal
+	mkdir -p $(call arena,$@)/lx106-hal
 	# note the CC=... to override possibly injected variable after calling 'configure'
 	(cd $(call arena,$@)/lx106-hal \
 		&& $(call setenv,$@) \
@@ -1320,7 +1319,7 @@ endif
 			$(call configure_target,$@) \
 			CC=$(TARGET_ARCH)-gcc \
 			--target=$(TARGET_ARCH) \
-			--host=$(TARGET_ARCH) ) $(call log,$@)
+			--host=$(TARGET_ARCH) ) $(call log_stage,$@)
 	touch $@
 
 # nb. override prefix to ONLY place hal .a into the target arch directory, don't copy to BOTH system-wide and target
@@ -1345,17 +1344,17 @@ endif
 .stage.%.libstdcpp-nox: .stage.%.libstdcpp
 	@echo STAGE: $@
 	# We copy existing stdc, adjust the makefile, and build a single .a to save much time
-	rm -rf $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox $(call log_stage,$@)
+	rm -rf $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox
 	(cd $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH) \
-		&& cp -a libstdc++-v3 libstdc++-v3-nox) $(call log,$@)
+		&& cp -a libstdc++-v3 libstdc++-v3-nox) $(call log_stage,$@)
 	(cd $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox \
 		&& $(call setenv,$@) \
 		&& $(MAKE) clean \
 		&& find . -name Makefile -exec sed -i 's/mlongcalls/mlongcalls -fno-exceptions/' \{\} \; \
 		&& $(MAKE)) $(call log,$@)
 	(cd $(TARGET_ARCH)$(call ext,$@)/$(TARGET_ARCH)/lib/ \
-		&& cp libstdc++.a libstdc++-exc.a \
-		&& cp $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a ./) $(call log,$@)
+		&& cp -v libstdc++.a libstdc++-exc.a \
+		&& cp -v $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a ./) $(call log,$@)
 	touch $@
 
 .stage.%.strip: .stage.%.libstdcpp-nox
