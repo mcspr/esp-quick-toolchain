@@ -751,7 +751,7 @@ endef
 .stage.init: .stage.git .stage.packages .stage.patch
 	@echo $@
 
-.stage.clean: $(patsubst %,.stage.%.clean,$(BUILD_TARGETS))
+.stage.clean: $(BUILD_TARGETS:%=.stage.%.clean)
 	@echo $@
 ifneq ($(NOCLEAN),)
 	rm -vf log.stage.*
@@ -812,7 +812,7 @@ ifneq ($(NOCLEAN),)
 	rm -vf $(PKGDIR)/$(call host,$@)*
 endif
 
-clean: $(patsubst %,.stage.%.clean,$(BUILD_TARGETS))
+clean: $(BUILD_TARGETS:%=.stage.%.clean)
 
 # Reset git repos to the initial state
 
@@ -830,7 +830,7 @@ REPOS := gcc binutils newlib lx106-hal mkspiffs mklittlefs esptool
 
 .PHONY: .git.info .git.%.info .git.%.clone .git-reset-and-clean .git.%.reset-and-clean .git.fetch .git.%.fetch .git.checkout .git.%.checkout
 
-.git.info: $(patsubst %,.git.%.info,$(REPOS))
+.git.info: $(REPOS:%=.git.%.info)
 
 .git.%.info:
 	@echo '{ "name": "$(call stem,$@)"',
@@ -849,7 +849,7 @@ REPOS := gcc binutils newlib lx106-hal mkspiffs mklittlefs esptool
 			$(REPODIR)/$(call gitdir,$@) )
 
 # Completely clean out a git directory, removing any untracked files
-.git.reset-and-clean: $(patsubst %,.git.%.reset-and-clean,$(REPOS))
+.git.reset-and-clean: $(REPOS:%=.git.%.reset-and-clean)
 
 .git.%.reset-and-clean:
 	@echo $@
@@ -861,7 +861,7 @@ REPOS := gcc binutils newlib lx106-hal mkspiffs mklittlefs esptool
 clean: .git.reset-and-clean
 
 # Sync with the remote and checkout any required branches for existing clone
-.git.pull: $(patsubst %,.git.%.pull,$(REPOS))
+.git.pull: $(REPOS:%=.git.%.pull)
 
 .git.%.pull:
 	@echo $@
@@ -871,7 +871,7 @@ clean: .git.reset-and-clean
 		&& git pull --recurse-submodules )
 
 # Checkout any required branches w/o syncing with the remote
-.git.checkout: $(patsubst %,.git.%.checkout,$(REPOS))
+.git.checkout: $(REPOS:%=.git.%.checkout)
 
 .git.%.checkout: $(if $(NOFETCH),,.git.%.clone)
 	@echo $@
@@ -908,7 +908,7 @@ pkgext = $(call __pkgext,$(call stem,$(1)))
 
 .PHONY: .package.info .package.%.info .package.fetch .package.%.fetch .package.unpack .package.%.unpack .package.clean .package.%.clean
 
-.package.info: $(patsubst %,.package.%.info,$(PACKAGES))
+.package.info: $(PACKAGES:%=.package.%.info)
 
 .package.%.info:
 	@echo '{ "name": "$(call stem,$@)",'
@@ -920,7 +920,7 @@ pkgext = $(call __pkgext,$(call stem,$(1)))
 	@echo '  "extension": "$(call pkgext,$@)" }'
 
 # Fetch package urls & unpack archives
-.package.fetch: $(patsubst %,.package.%.fetch,$(PACKAGES))
+.package.fetch: $(PACKAGES:%=.package.%.fetch)
 
 .package.%.fetch:
 	@echo $@
@@ -928,7 +928,7 @@ pkgext = $(call __pkgext,$(call stem,$(1)))
 	test -r $(REPODIR)/$(call pkgarchive,$@) \
 		|| wget -v -O $(REPODIR)/$(call pkgarchive,$@) $(call pkgurl,$@)
 
-.package.unpack: $(patsubst %,.package.%.unpack,$(PACKAGES))
+.package.unpack: $(PACKAGES:%=.package.%.unpack)
 
 .package.%.unpack: $(if $(NOFETCH),,.package.%.fetch)
 	@echo $@
@@ -951,7 +951,7 @@ pkgext = $(call __pkgext,$(call stem,$(1)))
 	fi
 	test -d $(REPODIR)/$(call pkgdir,$@)
 
-.package.clean: $(patsubst %,.package.%.clean,$(PACKAGES))
+.package.clean: $(PACKAGES:%=.package.%.clean)
 
 .package.%.clean:
 	@echo $@
@@ -1073,7 +1073,7 @@ patch: .stage.patch
 # Base target configuration info
 .PHONY: .target.info .target.%.info
 
-.target.info: $(patsubst %,.target.%.info,$(BUILD_TARGETS))
+.target.info: $(BUILD_TARGETS:%=.target.%.info)
 
 .target.%.info:
 	@echo '{ "host": "$(call host,$@)"',
@@ -1089,7 +1089,7 @@ patch: .stage.patch
 # Info about current stage build configuration
 .PHONY: .stage.info .stage.%.info
 
-.stage.info: $(patsubst %,.stage.%.info,$(BUILD_TARGETS))
+.stage.info: $(BUILD_TARGETS:%=.stage.%.info)
 
 .stage.%.info:
 	@echo '{ "setenv": "$(subst ",\",$(call setenv,$@))"',
@@ -1389,8 +1389,10 @@ endif
 
 .PHONY: tools .tool.%.all
 
+tools: $(BUILD_TARGETS:%=.tool.%.all)
+
 .tool.%.all: .tool.%.toolchain .tool.%.mkspiffs .tool.%.mklittlefs .tool.%.esptool .tool.%.python
-tools: $(patsubst %,.tool.%.all,$(BUILD_TARGETS))
+	@echo $@
 
 .PHONY: .tool.%.toolchain .tool.%.mkspiffs .tool.%.mklittlefs .tool.%.esptool .tool.%.python
 
@@ -1440,7 +1442,7 @@ package-json: .tool.LINUX.toolchain-package-json
 	# packaged artifact named a bit differently to help with clean-up name matching
 	# note that $(TARGET_ARCH)-gcc IS arduino internal name that is assigned to the toolchain
 	# (ref. arduino recipes below)
-	rm -vf $(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*$(call tarext,$@)
+	rm -vf $(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*
 	(tarball=$(call host,$@).$(TARGET_ARCH)-gcc$(GCC)-eqt$(REL)$(SUBREL)-$(REV)$(call tarext,$@) \
 	    && cd $(PKGDIR)/pkg.gcc.$(call arch,$@) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TARGET_ARCH)/ \
@@ -1477,7 +1479,7 @@ mkdir -p $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)
 	&& $(call make_package_json,$(TOOL_NAME),$(TOOL_DESC),$(TOOL_PKGREL),$(call asys,$@)) )
 cp $(call arena,$@)/$(TOOL_NAME)/$(TOOL_NAME)$(call exe,$@) \
 	$(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)/.
-rm -vf $(PKGDIR)/$(call host,$@).$(TOOL_NAME)-*$(call tarext,$@)
+rm -vf $(PKGDIR)/$(call host,$@).$(TOOL_NAME)-*
 (tarball=$(call host,$@).$(TOOL_NAME)-$(TOOL_REL).$(DATESTAMP)$(call tarext,$@) \
 	&& cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@) \
 	&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TOOL_NAME) \
@@ -1496,7 +1498,6 @@ endef
 	@echo $@
 	$(tool-build)
 	$(tool-package)
-	touch $@
 
 .tool.%.mklittlefs: TOOL_NAME=mklittlefs
 .tool.%.mklittlefs: TOOL_DESC=littlefs-utility
@@ -1508,7 +1509,6 @@ endef
 	@echo $@
 	$(tool-build)
 	$(tool-package)
-	touch $@
 
 # TODO esptool-ck was deprecated in favour of esptool-py a long time ago
 # TODO (re)package esptool-py? rn it is a submodule of the Core and distributed w/ the release version
@@ -1524,7 +1524,6 @@ endef
 	@echo $@
 	$(tool-build)
 	$(tool-package)
-	touch $@
 
 # python sourced from astral-sh/python-build-standalone
 # note that some versions take the one from the system or environment
@@ -1561,68 +1560,63 @@ clean: .package.python-$(2).clean
 
 endef
 
-# LINUX arch used only for bootstrapping, even though the interpreter is expected to work
+# these arches cant use or dont have system interpreter
 $(eval $(call python_package,LINUX,x86_64-unknown-linux-gnu))
 
-# these arches cant use or dont have system interpreter
+PYTHON_PACKAGE_TARGETS := WIN32 WIN64 MACOSX86 MACOSARM
+
 $(eval $(call python_package,WIN32,i686-pc-windows-msvc))
 $(eval $(call python_package,WIN64,x86_64-pc-windows-msvc))
 
 $(eval $(call python_package,MACOSX86,x86_64-apple-darwin))
 $(eval $(call python_package,MACOSARM,aarch64-apple-darwin))
 
-.PHONY: .tool.%.python .tool.%.python-via-env .tool.%.python-info
+# expect host python to be available before running preparation script
+$(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python,LINUX).unpack
+
+.PHONY: .tool.%.python .tool.%.python-info
 
 # if not explicitly set above, other targets expect
 # 1) system python being available i.e. /usr/bin/env python3
 # 2) system python being able to execute our script
 # later branches to either executing our other scripts through it, or using a different path set through environment variable
 # ref. python_via_env.py
-PYTHON_VIA_ENV_TARGETS := $(filter-out WIN32 WIN64 MACOSX86 MACOSARM,$(BUILD_TARGETS))
+PYTHON_VIA_ENV_TARGETS := $(filter-out $(PYTHON_PACKAGE_TARGETS),$(BUILD_TARGETS))
 
-PYTHON_VIA_ENV_STAGES := $(patsubst %,.tool.%.python-via-env,$(PYTHON_VIA_ENV_TARGETS))
-
-$(PYTHON_VIA_ENV_STAGES):
+$(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
+	@echo $@
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
-	(tarball=$(call host,$@).python-via-env$(call tarext,$@) \
-		&& rm -vf $(PKGDIR)/$$tarball \
-	    && cd $(PKGDIR)/pkg.python.$(call arch,$@) \
+	(cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& mkdir -p python3 \
 		&& touch python3/placeholder_for_arduino \
 		&& cp -v $(PWD)/python_via_env.py python3/python3 \
-		&& chmod +x python3/python3 \
+		&& chmod +x python3/python3 )
+	rm -vf $(PKGDIR)/$(call host,$@).python-*
+	(tarball=$(call host,$@).python-via-env$(call tarext,$@) \
+		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
 		&& cd $(PKGDIR) \
-		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
-
-define python_via_env
-
-.tool.$(1).python: .tool.$(1).python-via-env
-	@echo $$@
-
-endef
-
-$(foreach target,$(PYTHON_VIA_ENV_TARGETS),$(eval $(call python_via_env,$(target))))
 
 # 1) prepare PyZipFile (aka pythonVER.zip) with immutable standard library pyc
 # 2) prepare pythonVER._pth pointing to PyZipFile and any relevant paths (Windows DLLs dir, current dir, etc.)
 # 3) ensure root dir is named python3, and there is callable python3/python3(.exe)
 # 4) repackage through tarcmd (TODO arduino-cli or spec really care?)
-.tool.%.python:
+$(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python,LINUX).unpack
 	@echo $@
-	(cd $(REPODIR)/$(call python_dir,$@) \
-		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py ./ )
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
+	(cd $(PKGDIR)/pkg.python.$(call arch,$@) \
+		&& cp -r $(REPODIR)/$(call python_dir,$@) python3/ \
+		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py python3/ )
+	rm -vf $(PKGDIR)/$(call host,$@).python-*
 	(tarball=$(call host,$@).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(call tarext,$@) \
-		&& rm -vf $(PKGDIR)/$(call host,$@).python-* \
 		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
-		&& cp -r $(REPODIR)/$(call python_dir,$@) ./python3 \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
 		&& cd $(PKGDIR) \
-		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) ) $(call log,$@)
+		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 
 .PHONY: .arduino.%
@@ -1670,7 +1664,7 @@ ARDUINO_PKGFILE := $(ARDUINO)/package/package_esp8266com_index.template.json
 		--glob '$(PKGDIR)/*python*$(PYTHON_VERSION)+$(PYTHON_RELEASE)*.json' \
 		--glob '$(PKGDIR)/*python-via-env*.json'
 
-.arduino.build:
+.arduino.build: .package.python-$(call __arch_python,LINUX).unpack
 	(cd $(ARDUINO)/tools \
 		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 get.py --tool $(TARGET_ARCH)-gcc )
 	@echo "-------- Building and installing BearSSL"
