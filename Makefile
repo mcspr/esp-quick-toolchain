@@ -249,6 +249,18 @@ LTO := $(or $(lto),false)
 # Currently supported targets
 BUILD_TARGETS := LINUX LINUX32 ARM64 RPI WIN64 WIN32 MACOSARM MACOSX86
 
+# Assume .gz is the compression of choice for most systems
+# * .zst is the fastest compression and on par with .gz size;
+#   arduino-cli implements this in the shipped binary and expected to work
+#   platformio depends on technically optional, but common enough libzstd support in the tarfile module
+# * .bz2 is moderately better at compression than .gz, but is slower
+#   like .gz, supported by both build systems
+# * .xz is much better at compression than all options above, but awfully slow
+#   like .gz & .bz2, supported by both build systems
+TARCMD := tar
+TAROPT := zcf
+TAREXT := .tar.gz
+
 # Define the build and output naming, don't use directly (see below)
 # Currently not using ..._STATIC / -Wl,-static, its up to the tools
 #
@@ -258,8 +270,9 @@ BUILD_TARGETS := LINUX LINUX32 ARM64 RPI WIN64 WIN32 MACOSARM MACOSX86
 # ..._EXT    - toolchain name suffix
 # ..._EXE    - toolchain executable files suffix
 # ..._MKTGT  - tool target os hint
-# ..._TARCMD - release archive compression tool
-# ..._TAREXT - release archive file suffix
+# ..._TARCMD - release archive compression tool (optional, see $(TARCMD))
+# ..._TAROPT - compression tool command line options (optional, see $(TAROPT))
+# ..._TAREXT - release archive file suffix (optional, see $(TAREXT))
 #
 LINUX_HOST   := x86_64-linux-gnu
 LINUX_AHOST  := x86_64-pc-linux-gnu
@@ -267,9 +280,6 @@ LINUX_ASYS   := linux_x86_64
 LINUX_EXT    := .x86_64
 LINUX_EXE    :=
 LINUX_MKTGT  := linux
-LINUX_TARCMD := tar
-LINUX_TAROPT := zcf
-LINUX_TAREXT := tar.gz
 
 LINUX32_HOST   := i686-linux-gnu
 LINUX32_AHOST  := i686-pc-linux-gnu
@@ -277,9 +287,6 @@ LINUX32_ASYS   := linux_i686
 LINUX32_EXT    := .i686
 LINUX32_EXE    :=
 LINUX32_MKTGT  := linux
-LINUX32_TARCMD := tar
-LINUX32_TAROPT := zcf
-LINUX32_TAREXT := tar.gz
 
 ARM64_HOST   := aarch64-linux-gnu
 ARM64_AHOST  := aarch64-linux-gnu
@@ -287,9 +294,6 @@ ARM64_ASYS   := linux_aarch64
 ARM64_EXT    := .arm64
 ARM64_EXE    :=
 ARM64_MKTGT  := linux
-ARM64_TARCMD := tar
-ARM64_TAROPT := zcf
-ARM64_TAREXT := tar.gz
 
 RPI_HOST   := arm-linux-gnueabihf
 RPI_AHOST  := arm-linux-gnueabihf
@@ -297,9 +301,6 @@ RPI_ASYS   := linux_armv6l linux_armv7l
 RPI_EXT    := .rpi
 RPI_EXE    :=
 RPI_MKTGT  := linux
-RPI_TARCMD := tar
-RPI_TAROPT := zcf
-RPI_TAREXT := tar.gz
 
 WIN64_HOST   := x86_64-w64-mingw32
 WIN64_AHOST  := x86_64-mingw32
@@ -309,7 +310,7 @@ WIN64_EXE    := .exe
 WIN64_MKTGT  := windows
 WIN64_TARCMD := zip
 WIN64_TAROPT := -rq
-WIN64_TAREXT := zip
+WIN64_TAREXT := .zip
 
 WIN32_HOST   := i686-w64-mingw32
 WIN32_AHOST  := i686-mingw32
@@ -319,7 +320,7 @@ WIN32_EXE    := .exe
 WIN32_MKTGT  := windows
 WIN32_TARCMD := zip
 WIN32_TAROPT := -rq
-WIN32_TAREXT := zip
+WIN32_TAREXT := .zip
 
 MACOSX86_HOST   := x86_64-apple-darwin20.4
 MACOSX86_AHOST  := x86_64-apple-darwin
@@ -327,9 +328,6 @@ MACOSX86_ASYS   := darwin_x86_64
 MACOSX86_EXT    := .macosx86
 MACOSX86_EXE    :=
 MACOSX86_MKTGT  := macosx86
-MACOSX86_TARCMD := tar
-MACOSX86_TAROPT := zcf
-MACOSX86_TAREXT := tar.gz
 
 # 1. --disable-lto , per immediately broken mpfr & lto-plugin builds
 #    also disabled in pico toolchain, which uses the same osxcross dist
@@ -361,9 +359,6 @@ MACOSARM_ASYS   := darwin_arm64
 MACOSARM_EXT    := .macosarm
 MACOSARM_EXE    :=
 MACOSARM_MKTGT  := macosarm
-MACOSARM_TARCMD := tar
-MACOSARM_TAROPT := zcf
-MACOSARM_TAREXT := tar.gz
 
 # 4. strip cannot happen, some build scripts forcibly remove signature data
 # > aarch64-apple-darwin20.4-strip: warning: changes being made to the file will invalidate the code signature in ...
@@ -389,9 +384,10 @@ asys   = $($(call arch,$(1))_ASYS)
 ext    = $($(call arch,$(1))_EXT)
 exe    = $($(call arch,$(1))_EXE)
 mktgt  = $($(call arch,$(1))_MKTGT)
-tarcmd = $($(call arch,$(1))_TARCMD)
-taropt = $($(call arch,$(1))_TAROPT)
-tarext = $($(call arch,$(1))_TAREXT)
+
+tarcmd = $(or $($(call arch,$(1))_TARCMD),$(TARCMD))
+taropt = $(or $($(call arch,$(1))_TAROPT),$(TAROPT))
+tarext = $(or $($(call arch,$(1))_TAREXT),$(TAREXT))
 
 # DO NOT generate log files w/ NOLOG=1
 # expected to be at the end of *some* command printing to stdout/stderr
@@ -636,12 +632,12 @@ CONFIGURE_NEWLIB := \
 	--enable-newlib-nano-formatted-io \
 	--enable-newlib-reent-small \
 	--enable-target-optspace \
-	--target=$(TARGET_ARCH) \
 	--with-newlib \
 	--without-libgloss
 
 # Configuration for newlib normal build
 configure_newlib = \
+	--target=$(TARGET_ARCH) \
 	--prefix=$(call install,$(1)) \
 	$(CONFIGURE_NEWLIB)
 
@@ -756,12 +752,16 @@ endef
 	@echo $@
 
 .stage.clean: $(patsubst %,.stage.%.clean,$(BUILD_TARGETS))
+	@echo $@
+ifneq ($(NOCLEAN),)
+	rm -vf log.stage.*
+endif
 
 default: all
 
 all:
 	$(MAKE) .stage.init $(call log_stage,.stage.init)
-	$(MAKE) .stage.clean $(call log_stage,.stage.clean)
+	$(MAKE) .stage.clean
 	$(MAKE) .stage.LINUX.done
 	$(MAKE) $(patsubst %,.stage.%.done,$(filter-out LINUX,$(BUILD_TARGETS)))
 
@@ -1070,8 +1070,26 @@ download:
 
 patch: .stage.patch
 
+# Base target configuration info
+.PHONY: .target.info .target.%.info
+
+.target.info: $(patsubst %,.target.%.info,$(BUILD_TARGETS))
+
+.target.%.info:
+	@echo '{ "host": "$(call host,$@)"',
+	@echo '  "ahost": "$(call ahost,$@)"',
+	@echo '  "asys": "$(call asys,$@)"',
+	@echo '  "ext": "$(call ext,$@)"',
+	@echo '  "exe": "$(call exe,$@)"',
+	@echo '  "mktgt": "$(call mktgt,$@)"',
+	@echo '  "tarcmd": "$(call tarcmd,$@)"',
+	@echo '  "taropt": "$(call taropt,$@)"',
+	@echo '  "tarext": "$(call tarext,$@)" }'
+
 # Info about current stage build configuration
-.PHONY: .stage.%.info
+.PHONY: .stage.info .stage.%.info
+
+.stage.info: $(patsubst %,.stage.%.info,$(BUILD_TARGETS))
 
 .stage.%.info:
 	@echo '{ "setenv": "$(subst ",\",$(call setenv,$@))"',
@@ -1423,7 +1441,7 @@ package-json: .tool.LINUX.toolchain-package-json
 	# note that $(TARGET_ARCH)-gcc IS arduino internal name that is assigned to the toolchain
 	# (ref. arduino recipes below)
 	rm -vf $(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*$(call tarext,$@)
-	(tarball=$(call host,$@).$(TARGET_ARCH)-gcc$(GCC)-eqt$(REL)$(SUBREL)-$(REV).$(call tarext,$@) \
+	(tarball=$(call host,$@).$(TARGET_ARCH)-gcc$(GCC)-eqt$(REL)$(SUBREL)-$(REV)$(call tarext,$@) \
 	    && cd $(PKGDIR)/pkg.gcc.$(call arch,$@) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TARGET_ARCH)/ \
 		&& cd $(PKGDIR) \
@@ -1460,7 +1478,7 @@ mkdir -p $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)
 cp $(call arena,$@)/$(TOOL_NAME)/$(TOOL_NAME)$(call exe,$@) \
 	$(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)/.
 rm -vf $(PKGDIR)/$(call host,$@).$(TOOL_NAME)-*$(call tarext,$@)
-(tarball=$(call host,$@).$(TOOL_NAME)-$(TOOL_REL).$(DATESTAMP).$(call tarext,$@) \
+(tarball=$(call host,$@).$(TOOL_NAME)-$(TOOL_REL).$(DATESTAMP)$(call tarext,$@) \
 	&& cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@) \
 	&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TOOL_NAME) \
 	&& cd $(PKGDIR) \
@@ -1567,7 +1585,7 @@ PYTHON_VIA_ENV_STAGES := $(patsubst %,.tool.%.python-via-env,$(PYTHON_VIA_ENV_TA
 $(PYTHON_VIA_ENV_STAGES):
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
-	(tarball=$(call host,$@).python-via-env.$(call tarext,$@) \
+	(tarball=$(call host,$@).python-via-env$(call tarext,$@) \
 		&& rm -vf $(PKGDIR)/$$tarball \
 	    && cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& mkdir -p python3 \
@@ -1598,7 +1616,7 @@ $(foreach target,$(PYTHON_VIA_ENV_TARGETS),$(eval $(call python_via_env,$(target
 		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py ./ )
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
-	(tarball=$(call host,$@).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE).$(call tarext,$@) \
+	(tarball=$(call host,$@).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(call tarext,$@) \
 		&& rm -vf $(PKGDIR)/$(call host,$@).python-* \
 		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& cp -r $(REPODIR)/$(call python_dir,$@) ./python3 \
