@@ -1093,18 +1093,18 @@ patch: .stage.patch
 
 .stage.%.info:
 	@echo '{ "setenv": "$(subst ",\",$(call setenv,$@))"',
-	@echo '  "configure_ncurses": "$(CONFIGURE_NCURSES)"',
-	@echo '  "configure_libexpat": "$(CONFIGURE_LIBEXPAT)"',
 	@echo '  "configure": "$(call configure,$@)"',
-	@echo '  "configure_cross": "$(call configure_cross,$@)"',
-	@echo '  "configure_target": "$(call configure_target,$@)"',
-	@echo '  "configure_gmp": "$(call configure_gmp,$@)"',
 	@echo '  "configure_binutils": "$(call configure_binutils,$@)"',
+	@echo '  "configure_cross": "$(call configure_cross,$@)"',
 	@echo '  "configure_gdb": "$(call configure_gdb,$@)"',
-	@echo '  "configure_newlib": "$(call configure_newlib,$@)" }'
+	@echo '  "configure_gmp": "$(call configure_gmp,$@)"',
+	@echo '  "configure_libexpat": "$(CONFIGURE_LIBEXPAT)"',
+	@echo '  "configure_ncurses": "$(call configure_ncurses,$@)"',
+	@echo '  "configure_newlib": "$(call configure_newlib,$@)"',
+	@echo '  "configure_target": "$(call configure_target,$@)" }'
 
 # Shared dependency for binutils and gcc
-.stage.%.gmp:
+.stage.%.gmp-make:
 	@echo STAGE: $@
 	rm -rf $(call arena,$@)/gmp
 	mkdir -p $(call arena,$@)/gmp
@@ -1114,6 +1114,10 @@ patch: .stage.patch
 			$(call configure_gmp,$@) \
 		&& $(MAKE) \
 		&& $(MAKE) install) $(call log_stage,$@)
+	touch $@
+
+.stage.%.mpfr-make: .stage.%.gmp-make
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/mpfr
 	mkdir -p $(call arena,$@)/mpfr
 	(cd $(call arena,$@)/mpfr \
@@ -1122,7 +1126,11 @@ patch: .stage.patch
 			$(call configure_cross,$@) \
 			$(call configure_with_gmp,$@) \
 		&& $(MAKE) \
-		&& $(MAKE) install) $(call log,$@)
+		&& $(MAKE) install) $(call log_stage,$@)
+	touch $@
+
+.stage.%.mpc-make: .stage.%.mpfr-make
+	@echo STAGE: $@
 	rm -rf $(call arena,$@)/mpc
 	mkdir -p $(call arena,$@)/mpc
 	(cd $(call arena,$@)/mpc \
@@ -1131,7 +1139,11 @@ patch: .stage.patch
 			$(call configure_cross,$@) \
 			$(call configure_with_gmp,$@) \
 		&& $(MAKE) \
-		&& $(MAKE) install) $(call log,$@)
+		&& $(MAKE) install) $(call log_stage,$@)
+	touch $@
+
+.stage.%.gmp: .stage.%.gmp-make .stage.%.mpfr-make .stage.%.mpc-make
+	@echo STAGE: $@
 	touch $@
 
 # isl-0.xx expects gmp prefix as --with-gmp-prefix=... unlike any other ./configure script here
@@ -1407,6 +1419,7 @@ package-json: .tool.LINUX.toolchain-package-json
 
 .tool.%.toolchain-package-json: | .stage.%.done
 	@echo $@
+	rm -vf $(call install,$@)/package.json
 	(cd $(call install,$@) \
 		&& $(call make_package_json,$(TOOL_NAME),$(TOOL_DESC),$(TOOL_PKGREL),$(call asys,$@)) )
 
@@ -1430,25 +1443,68 @@ package-json: .tool.LINUX.toolchain-package-json
 			! -name '$(TARGET_ARCH)-gdb-add-index' -a ! -name '$(TARGET_ARCH)-gstack' \
 			-exec $$STRIP {} \; )
 
+# gathers license info from the top directory of the currently checked out repo / unpacked archive
+# note that output does not always represent which parts of the package are actually used
+# 1) directory to search 2) destination directory 3) find option(s) before predicates
+define copy_copying
+	(cd $(1) && find ./ $(3) -type f '(' -name 'LICENSE*' -o -name 'COPYING*' ')' -print0 \
+		| tar --null -c -T - -f - \
+		| tar -C $(2) -x -f - )
+endef
+
+# 1) 'git repo' or 'package' name
+tool_toolchain_copying_src = \
+	$(REPODIR)/$(or $(if $(filter $(1),$(REPOS)),$(call __gitdir,$(1)),),\
+		$(if $(filter $(1),$(PACKAGES)),$(call __pkgdir,$(1)),),\
+			$(error cant find dir for $(1)))
+
+# store license / copying / legal in the resulting toolchain archive
+# 1) destination root 2) 'git repo' or 'package' name
+define tool_toolchain_copying
+	mkdir -p $(1)/$(2)
+	$(call copy_copying,$(call tool_toolchain_copying_src,$(2)),$(1)/$(2),-maxdepth 1)
+
+endef
+
+# gather copying / license / legal info files from the declared repo/$name root directory
+# not everything declared beforehand is related to toolchain package, explicitly listing them near use
+TOOLCHAIN_GIT_REPOS := binutils gcc lx106-hal newlib
+TOOLCHAIN_PACKAGES := $(TOOLCHAIN_GIT_REPOS) gmp isl libexpat mpc mpfr ncurses
+
+toolchain_tarball = $(call host,$(1)).$(TARGET_ARCH)-gcc$(GCC)-eqt$(REL)$(SUBREL)-$(REV)$(call tarext,$(1))
+
+.PHONY: .tool.%.toolchain-tarball
+
 # prepare full toolchain archive including binutils + gdb + gcc + newlib
 # recipe only has to copy staged build result from the target install dir
-.tool.%.toolchain: | .tool.%.toolchain-package-json .stage.%.done
+.tool.%.toolchain-tarball: | .stage.%.done
 	@echo $@
 	# both arduino & platformio share package archive structure with $(TARGET_ARCH) as root
 	mkdir -p $(PKGDIR)
 	rm -rf $(PKGDIR)/pkg.gcc.$(call arch,$@)
 	mkdir -p $(PKGDIR)/pkg.gcc.$(call arch,$@)
 	cp -a $(call install,$@) $(PKGDIR)/pkg.gcc.$(call arch,$@)/$(TARGET_ARCH)
+	# libtool archives. not intended for distribution
+	find $(PKGDIR)/pkg.gcc.$(call arch,$@)/$(TARGET_ARCH) -type f -name '*.la' -delete
+	# license info. packaging limited to topdir, otherwise its the same as other tool recipes
+	$(foreach name,$(TOOLCHAIN_PACKAGES),$(call tool_toolchain_copying,$(PKGDIR)/pkg.gcc.$(call arch,$@)/$(TARGET_ARCH)/share/licenses,$(name)))
 	# packaged artifact named a bit differently to help with clean-up name matching
 	# note that $(TARGET_ARCH)-gcc IS arduino internal name that is assigned to the toolchain
 	# (ref. arduino recipes below)
 	rm -vf $(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*
-	(tarball=$(call host,$@).$(TARGET_ARCH)-gcc$(GCC)-eqt$(REL)$(SUBREL)-$(REV)$(call tarext,$@) \
+	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call toolchain_tarball,$@)
+	(tarball=$(call toolchain_tarball,$@) \
 	    && cd $(PKGDIR)/pkg.gcc.$(call arch,$@) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TARGET_ARCH)/ \
 		&& cd $(PKGDIR) \
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
 	rm -rf $(PKGDIR)/pkg.gcc.$(call arch,$@)
+
+.tool.%.toolchain: | .stage.%.done
+	@echo $@
+	$(MAKE) .tool.$(call stem,$@).toolchain-strip
+	$(MAKE) .tool.$(call stem,$@).toolchain-package-json
+	$(MAKE) .tool.$(call stem,$@).toolchain-tarball
 
 # other currently packaged tools depend only on the host toolchain
 
@@ -1460,32 +1516,49 @@ package-json: .tool.LINUX.toolchain-package-json
 # PKGREL expected to be some kind of semver to satisfy platformio indexing. not really enforced for releases, but strongly suggested
 
 define tool-build
-rm -rf $(call arena,$@)/$(TOOL_NAME)
-mkdir -p $(call arena,$@)/$(TOOL_NAME)
-cp -r $(REPODIR)/$(TOOL_DIR)/* $(call arena,$@)/$(TOOL_NAME)/.
-(cd $(call arena,$@)/$(TOOL_NAME) \
-	&& $(call setenv_cross,$@) \
-	&& $(MAKE) -j1 \
-		TARGET_OS=$(call mktgt,$@) \
-		BUILD_CONFIG_NAME="-arduino-esp8266" \
-		VERSION="$(TOOL_REL)" \
-		$(TOOL_NAME)$(call exe,$@))
+	rm -rf $(call arena,$@)/$(TOOL_NAME)
+	mkdir -p $(call arena,$@)/$(TOOL_NAME)
+	cp -r $(REPODIR)/$(TOOL_DIR)/* $(call arena,$@)/$(TOOL_NAME)/.
+	(cd $(call arena,$@)/$(TOOL_NAME) \
+		&& $(call setenv_cross,$@) \
+		&& $(MAKE) -j1 \
+			TARGET_OS=$(call mktgt,$@) \
+			BUILD_CONFIG_NAME="-arduino-esp8266" \
+			VERSION="$(TOOL_REL)" \
+			$(TOOL_NAME)$(call exe,$@))
+endef
+
+tool_tarball = $(call host,$(1)).$(TOOL_NAME)-$(TOOL_REL).$(DATESTAMP)$(call tarext,$(1))
+
+define tool-package-files
+(cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME) \
+	&& cp $(call arena,$@)/$(TOOL_DIR)/$(TOOL_NAME)$(call exe,$@) ./ )
+endef
+
+define tool-package-copying
+	mkdir -p $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)/share/licenses/$(TOOL_NAME)
+	$(call copy_copying,$(call arena,$@)/$(TOOL_NAME),$(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)/share/licenses/$(TOOL_NAME),)
+endef
+
+define tool-package-tarball
+	rm -vf $(PKGDIR)/$(call host,$@).$(TOOL_NAME)-*
+	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call tool_tarball,$@)
+	(tarball=$(call tool_tarball,$@) \
+		&& cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@) \
+		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TOOL_NAME) \
+		&& cd $(PKGDIR) \
+		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
 endef
 
 define tool-package
-rm -rf $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)
-mkdir -p $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)
-(cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME) \
-	&& $(call make_package_json,$(TOOL_NAME),$(TOOL_DESC),$(TOOL_PKGREL),$(call asys,$@)) )
-cp $(call arena,$@)/$(TOOL_NAME)/$(TOOL_NAME)$(call exe,$@) \
-	$(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)/.
-rm -vf $(PKGDIR)/$(call host,$@).$(TOOL_NAME)-*
-(tarball=$(call host,$@).$(TOOL_NAME)-$(TOOL_REL).$(DATESTAMP)$(call tarext,$@) \
-	&& cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@) \
-	&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TOOL_NAME) \
-	&& cd $(PKGDIR) \
-	&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
-rm -rf $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)
+	rm -rf $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)
+	mkdir -p $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)
+	(cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME) \
+		&& $(call make_package_json,$(TOOL_NAME),$(TOOL_DESC),$(TOOL_PKGREL),$(call asys,$@)) )
+	$(tool-package-files)
+	$(tool-package-copying)
+	$(tool-package-tarball)
+	rm -rf $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)
 endef
 
 .tool.%.mkspiffs: TOOL_NAME=mkspiffs
@@ -1583,6 +1656,8 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 # ref. python_via_env.py
 PYTHON_VIA_ENV_TARGETS := $(filter-out $(PYTHON_PACKAGE_TARGETS),$(BUILD_TARGETS))
 
+python_via_env_tarball = $(call host,$(1)).python-via-env$(call tarext,$(1))
+
 $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 	@echo $@
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
@@ -1593,12 +1668,15 @@ $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 		&& cp -v $(PWD)/python_via_env.py python3/python3 \
 		&& chmod +x python3/python3 )
 	rm -vf $(PKGDIR)/$(call host,$@).python-*
-	(tarball=$(call host,$@).python-via-env$(call tarext,$@) \
+	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call python_via_env_tarball,$@)
+	(tarball=$(call python_via_env_tarball,$@) \
 		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
 		&& cd $(PKGDIR) \
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
 	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
+
+python_tarball = $(call host,$(1)).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(call tarext,$(1))
 
 # 1) prepare PyZipFile (aka pythonVER.zip) with immutable standard library pyc
 # 2) prepare pythonVER._pth pointing to PyZipFile and any relevant paths (Windows DLLs dir, current dir, etc.)
@@ -1612,7 +1690,8 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 		&& cp -r $(REPODIR)/$(call python_dir,$@) python3/ \
 		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py python3/ )
 	rm -vf $(PKGDIR)/$(call host,$@).python-*
-	(tarball=$(call host,$@).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(call tarext,$@) \
+	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call python_tarball,$@)
+	(tarball=$(call python_tarball,$@) \
 		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
 		&& cd $(PKGDIR) \
