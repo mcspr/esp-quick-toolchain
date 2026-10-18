@@ -16,11 +16,6 @@ PYZIPFILE_IGNORE_NAMES = (
     "turtledemo",
 )
 
-UNUSED_DIRS = (
-    "include",  # development headers
-    "share",  # manpages
-)
-
 PTH_TAIL = (
     "",
     "# Uncomment to run site.main() automatically",
@@ -117,7 +112,9 @@ class Generic:
         out = []
         out.append(f"../lib/{self.stdlib_zip.name}")
         out.append(f"../lib/python{sys.version_info.major}.{sys.version_info.minor}")
-        out.append(f"../lib/python{sys.version_info.major}.{sys.version_info.minor}/lib-dynload")
+        out.append(
+            f"../lib/python{sys.version_info.major}.{sys.version_info.minor}/lib-dynload"
+        )
         out.extend(PTH_TAIL)
         return "\n".join(out)
 
@@ -127,6 +124,12 @@ def remove_path(p: pathlib.Path):
         shutil.rmtree(p, ignore_errors=True)
     else:
         p.unlink(missing_ok=True)
+
+
+def maybe_remove_empty(p: pathlib.Path):
+    if len(list(p.iterdir())) == 0:
+        print(f"Removing empty directory {p}")
+        remove_path(p)
 
 
 if __name__ == "__main__":
@@ -159,7 +162,10 @@ if __name__ == "__main__":
             p = pathlib.Path(s).resolve()
             return p not in ignore_paths
 
-        pending_removal: list[pathlib.Path] = []
+        pending_removal: list[pathlib.Path] = [
+            handler.stdlib_dir
+            / "__pycache__",  # purge zipfile artifacts, in case stdlib_dir remains
+        ]
 
         with zipfile.PyZipFile(
             stdlib_zip, mode="w", compression=zipfile.ZIP_DEFLATED
@@ -173,7 +179,7 @@ if __name__ == "__main__":
                 if p.name == "lib-dynload":
                     continue
 
-                # .zip contains .pyc
+                # .zip already contains .pyc, ignore existing ones / overwrites
                 if p.name == "__pycache__":
                     pending_removal.append(p)
                     continue
@@ -188,13 +194,13 @@ if __name__ == "__main__":
         for p in pending_removal:
             remove_path(p)
 
-        if len(list(handler.stdlib_dir.iterdir())) == 0:
-            print(f"Removing empty directory {p}")
-            remove_path(handler.stdlib_dir)
+        maybe_remove_empty(handler.stdlib_dir)
 
-    unused_paths = {(root / name).resolve() for name in UNUSED_DIRS}
-    for p in unused_paths:
-        print(f"Removing unused directory {p}")
+    remove_path(root / "include")  # not intended for build environment
+
+    for p in handler.bindir.glob(
+        "pip*"
+    ):  # modules are not to be modified after packaging
         remove_path(p)
 
     print(f"Site override {handler.pth_file}")
@@ -204,5 +210,5 @@ if __name__ == "__main__":
         handler, "bindir_entrypoint", None
     )
     if bindir_entrypoint:
-        print(f"Entrypoint ${root}/python3")
+        print(f"Entrypoint {root}/python3")
         handler.entrypoint.symlink_to(bindir_entrypoint.relative_to(root))
