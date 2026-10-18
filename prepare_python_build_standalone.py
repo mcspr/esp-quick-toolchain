@@ -117,6 +117,7 @@ class Generic:
         out = []
         out.append(f"../lib/{self.stdlib_zip.name}")
         out.append(f"../lib/python{sys.version_info.major}.{sys.version_info.minor}")
+        out.append(f"../lib/python{sys.version_info.major}.{sys.version_info.minor}/lib-dynload")
         out.extend(PTH_TAIL)
         return "\n".join(out)
 
