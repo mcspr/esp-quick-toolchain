@@ -1248,10 +1248,10 @@ BUILD_CROSS = .stage.%.gmp \
 # attempt to fix dynamic plugins loader by actually building plugins dynamically
 # https://github.com/msys2/MINGW-packages/issues/7890
 # https://github.com/msys2/MINGW-packages/blob/68f7d4665c396a464536871b1de7b680a47a8fa7/mingw-w64-binutils/PKGBUILD#L150-L151
-WIN32_DLLEXT := .dll
-WIN64_DLLEXT := .dll
+WIN32_DLL := .dll
+WIN64_DLL := .dll
 
-dllext = $(or $($(call arch,$(1))_DLLEXT),.so)
+dll = $(or $($(call arch,$(1))_DLL),.so)
 
 .stage.%.binutils-post: .stage.%.binutils-make
 	@echo STAGE: $@
@@ -1265,7 +1265,7 @@ ifneq ($(filter-out master binutils-2_32,$(BINUTILS_BRANCH)),)
 			--enable-static=no \
 			--enable-shared \
 		&& $(MAKE) \
-		&& cp -v .libs/libdep$(call dllext,$@) \
+		&& cp -v .libs/libdep$(call dll,$@) \
 			$(call install,$@)/lib/bfd-plugins/ ) $(call log_stage,$@)
 endif
 	touch $@
@@ -1428,20 +1428,36 @@ package-json: .tool.LINUX.toolchain-package-json
 
 .PHONY: .tool.%.toolchain-strip
 
+# manual `make install-strip` since this script never defines or uses $(STRIPPROG)
+# note that anything configuring through autotools *should* work with it
+
+# in case exe and dll suffixes are available, just match them instead of probing filetypes
+__tool_toolchain_find_exedll = \
+	-name '*$(call exe,$(1))' -o \
+	-name '*$(call dll,$(1))'
+
+# make sure to ignore some executable false-positives
+# - bogus mingw .dll.a (wat?)
+# - libtool archives
+# - shellscripts from gcc & gdb
+__tool_toolchain_find_generic = \
+	'!' -name '*.a' \
+	'!' -name '*.la' \
+	'!' -name '*.sh' \
+	'!' -exec sh -c "head -c32 {} | grep -q -e '\#!.*/bin/sh' -e '\#!.*/bin/env sh' -e '\#!.*/bin/env bash'" \;
+
+tool_toolchain_strip_find = \
+	find $(1) -type f -executable '(' \
+	$(if $(call exe,$(2))$(call dll,$(2)),$(call __tool_toolchain_find_exedll,$(2)),$(__tool_toolchain_find_generic)) \
+	')' -print0
+
 .tool.%.toolchain-strip:
 	@echo $@
-	# manual workaround since we havent done `make install-strip` OR used $(STRIPPROG)
-	# note that autotools-enabled ./configure scripts `install` SHOULD honor $$STRIP from environment
 	($(call setenv_cross,$@) \
-		&& $$STRIP \
-			$(call install,$@)/lib/bfd-plugins/* \
-			$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/c*$(call exe,$@) \
-			$(call install,$@)/libexec/gcc/$(TARGET_ARCH)/*/lto1$(call exe,$@) )
-	# ignore some false-positives from gdb shell scripts
-	($(call setenv_cross,$@) \
-		&& find $(call install,$@)/bin -executable -type f \
-			! -name '$(TARGET_ARCH)-gdb-add-index' -a ! -name '$(TARGET_ARCH)-gstack' \
-			-exec $$STRIP {} \; )
+		&& ( $(call tool_toolchain_strip_find,\
+				$(call install,$@)/bin \
+				$(call install,$@)/lib/bfd-plugins \
+				$(call install,$@)/libexec/gcc/$(TARGET_ARCH),$@) | xargs -t -r -0 $$STRIP ))
 
 # gathers license info from the top directory of the currently checked out repo / unpacked archive
 # note that output does not always represent which parts of the package are actually used
