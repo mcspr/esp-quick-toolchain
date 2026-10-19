@@ -459,7 +459,7 @@ endif
 # shared gmp stack dependency
 
 # ./configure cannot test .s w/ osxcross toolchain
-MACOSX86_GMP_CONFIGURE_FLAGS := --disable_assembly
+MACOSX86_GMP_CONFIGURE_FLAGS := --disable-assembly
 MACOSARM_GMP_CONFIGURE_FLAGS := $(MACOSX86_GMP_CONFIGURE_FLAGS)
 
 configure_gmp = \
