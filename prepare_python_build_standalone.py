@@ -39,6 +39,10 @@ class Windows:
         return f"Windows<{self.root}>"
 
     @property
+    def bindir(self) -> pathlib.Path:  # Scripts/ unused in current distribution
+        return self.root
+
+    @property
     def entrypoint(self) -> pathlib.Path:
         return self.root / "python.exe"
 
