@@ -867,16 +867,21 @@ clean: .git.reset-and-clean
 	@echo $@
 	test -d $(REPODIR)/$(call gitdir,$@)/.git
 	(cd $(REPODIR)/$(call gitdir,$@) \
-		&& git checkout $(call gitbranch,$@) \
+		&& git reset --hard --recurse-submodules \
+		&& git clean -x -f -d \
+		&& ( git checkout $(call gitbranch,$@) \
+			|| ( git fetch origin $(call gitbranch,$@) && git checkout $(call gitbranch,$@)) \
 		&& git pull --recurse-submodules )
 
 # Checkout any required branches w/o syncing with the remote
 .git.checkout: $(REPOS:%=.git.%.checkout)
 
-.git.%.checkout: $(if $(NOFETCH),,.git.%.reset-and-clean)
+.git.%.checkout: $(if $(NOFETCH),,.git.%.clone)
 	@echo $@
 	test -d $(REPODIR)/$(call gitdir,$@)/.git
 	(cd $(REPODIR)/$(call gitdir,$@) \
+		&& git reset --hard --recurse-submodules \
+		&& git clean -x -f -d \
 		&& git checkout $(call gitbranch,$@) )
 
 # TODO: tarball support for humongous repos (gcc, binutils, etc.)
