@@ -873,7 +873,7 @@ clean: .git.reset-and-clean
 # Checkout any required branches w/o syncing with the remote
 .git.checkout: $(REPOS:%=.git.%.checkout)
 
-.git.%.checkout: $(if $(NOFETCH),,.git.%.clone)
+.git.%.checkout: $(if $(NOFETCH),,.git.%.reset-and-clean)
 	@echo $@
 	test -d $(REPODIR)/$(call gitdir,$@)/.git
 	(cd $(REPODIR)/$(call gitdir,$@) \
