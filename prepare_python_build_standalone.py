@@ -5,8 +5,6 @@ import pathlib
 import sys
 import zipfile
 
-from typing import Optional
-
 # ref. emscripten/wasm_assets.py
 # note that site data vars are already portable
 PYZIPFILE_IGNORE_NAMES = (
@@ -27,11 +25,11 @@ STDLIB_DIR = f"python{sys.version_info.major}.{sys.version_info.minor}"
 STDLIB_ZIP = f"python{sys.version_info.major}{sys.version_info.minor}.zip"
 
 
-class Windows:
-    @staticmethod
-    def probe(p: pathlib.Path) -> bool:
-        return (p / "python.exe").exists() or (p / "Lib").exists()
+def is_windows_dist(p: pathlib.Path) -> bool:
+    return (p / "python.exe").exists() or (p / "Lib").exists()
 
+
+class Windows:
     def __init__(self, root: pathlib.Path):
         self.root = root
 
@@ -149,7 +147,9 @@ if __name__ == "__main__":
     if not root.is_dir():
         raise ValueError(f"{root} not a dir")
 
-    handler = Windows(root) if Windows.probe(root) else Generic(root)
+    handler: Windows | Generic = (
+        Windows(root) if is_windows_dist(root) else Generic(root)
+    )
     print(f"Starting {handler}")
 
     stdlib_zip = handler.stdlib_zip
@@ -210,9 +210,7 @@ if __name__ == "__main__":
     print(f"Site override {handler.pth_file}")
     handler.pth_file.write_text(handler.pth_contents)
 
-    bindir_entrypoint: Optional[pathlib.Path] = getattr(
-        handler, "bindir_entrypoint", None
-    )
+    bindir_entrypoint: pathlib.Path | None = getattr(handler, "bindir_entrypoint", None)
     if bindir_entrypoint:
         print(f"Entrypoint {root}/python3")
         handler.entrypoint.symlink_to(bindir_entrypoint.relative_to(root))
