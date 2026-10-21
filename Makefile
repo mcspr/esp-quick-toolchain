@@ -38,103 +38,103 @@ DATESTAMP ?= $(shell date +%y%m%d)
 GHUSER ?= $(or $(shell cat .ghuser),$(error Need to specify Github username on the command line as "GHUSER=xxxx" or in .ghuser))
 GHTOKEN ?= $(or $(shell cat .ghtoken),$(error Need to specify Github Personal Access Token on the command line "GHTOKEN=xxxx" or in .ghtoken))
 
-# Depending on the GCC version get proper branch and support libs
+# Different GCC versions depend on different support libraries & packages versions
 ifeq ($(GCC), 4.8)
     ISL_VER       := 0.12.2
-    GCC_BRANCH    := call0-4.8.2
+    GCC_REF       := call0-4.8.2
     GCC_PKGREL    := 40802
     GCC_REPO      := https://github.com/$(GHUSER)/gcc-xtensa.git
     GCC_DIR       := gcc
-    BINUTILS_BRANCH := master
+    BINUTILS_REF  := master
     BINUTILS_REPO := https://github.com/$(GHUSER)/binutils-gdb-xtensa.git
     BINUTILS_DIR  := binutils-gdb
 else ifeq ($(GCC), 4.9)
     ISL_VER       := 0.12.2
-    GCC_BRANCH    := call0-4.9.2
+    GCC_REF       := call0-4.9.2
     GCC_PKGREL    := 40902
     GCC_REPO      := https://github.com/$(GHUSER)/gcc-xtensa.git
     GCC_DIR       := gcc
-    BINUTILS_BRANCH := master
+    BINUTILS_REF  := master
     BINUTILS_REPO := https://github.com/$(GHUSER)/binutils-gdb-xtensa.git
     BINUTILS_DIR  := binutils-gdb
 else ifeq ($(GCC), 5.2)
     ISL_VER       := 0.12.2
-    GCC_BRANCH    := xtensa-ctng-esp-5.2.0
+    GCC_REF       := xtensa-ctng-esp-5.2.0
     GCC_REPO      := https://github.com/$(GHUSER)/gcc-xtensa.git
     GCC_DIR       := gcc
-    BINUTILS_BRANCH := master
+    BINUTILS_REF  := master
     BINUTILS_REPO := https://github.com/$(GHUSER)/binutils-gdb-xtensa.git
     BINUTILS_DIR  := binutils-gdb
 else ifeq ($(GCC), 7.2)
     ISL_VER       := 0.16.1
-    GCC_BRANCH    := xtensa-ctng-7.2.0
+    GCC_REF       := xtensa-ctng-7.2.0
     GCC_REPO      := https://github.com/$(GHUSER)/gcc-xtensa.git
     GCC_DIR       := gcc
-    BINUTILS_BRANCH := master
+    BINUTILS_REF  := master
     BINUTILS_REPO := https://github.com/$(GHUSER)/binutils-gdb-xtensa.git
     BINUTILS_DIR  := binutils-gdb
 else ifeq ($(GCC), 9.1)
     ISL_VER       := 0.18
-    GCC_BRANCH    := gcc-9_1_0-release
+    GCC_REF       := gcc-9_1_0-release
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_32
+    BINUTILS_REF  := binutils-2_32
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 9.2)
     ISL_VER       := 0.18
-    GCC_BRANCH    := gcc-9_2_0-release
+    GCC_REF       := gcc-9_2_0-release
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_32
+    BINUTILS_REF  := binutils-2_32
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 9.3)
     ISL_VER       := 0.18
-    GCC_BRANCH    := releases/gcc-9.3.0
+    GCC_REF       := releases/gcc-9.3.0
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_32
+    BINUTILS_REF  := binutils-2_32
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 10.1)
     ISL_VER       := 0.18
-    GCC_BRANCH    := releases/gcc-10.1.0
+    GCC_REF       := releases/gcc-10.1.0
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_32
+    BINUTILS_REF  := binutils-2_32
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 10.2)
     ISL_VER       := 0.18
-    GCC_BRANCH    := releases/gcc-10.2.0
+    GCC_REF       := releases/gcc-10.2.0
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_32
+    BINUTILS_REF  := binutils-2_32
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 10.3)
     ISL_VER       := 0.18
-    GCC_BRANCH    := releases/gcc-10.3.0
+    GCC_REF       := releases/gcc-10.3.0
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_32
+    BINUTILS_REF  := binutils-2_32
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 11.1)
     ISL_VER       := 0.18
-    GCC_BRANCH    := releases/gcc-11.1.0
+    GCC_REF       := releases/gcc-11.1.0
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_32
+    BINUTILS_REF  := binutils-2_32
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else ifeq ($(GCC), 14.4)
     ISL_VER       := 0.24
-    GCC_BRANCH    := releases/gcc-14.4.0
+    GCC_REF       := releases/gcc-14.4.0
     GCC_REPO      := https://gcc.gnu.org/git/gcc.git
     GCC_DIR       := gcc-gnu
-    BINUTILS_BRANCH := binutils-2_47
+    BINUTILS_REF  := binutils-2_47
     BINUTILS_REPO := https://sourceware.org/git/binutils-gdb.git
     BINUTILS_DIR  := binutils-gdb-gnu
 else
@@ -165,40 +165,40 @@ TARGET_ARCH := xtensa-lx106-elf
 
 gcc_DIR := $(GCC_DIR)
 gcc_REPO = $(GCC_REPO)
-gcc_BRANCH := $(GCC_BRANCH)
+gcc_REF := $(GCC_REF)
 
 binutils_DIR := $(BINUTILS_DIR)
 binutils_REPO := $(BINUTILS_REPO)
-binutils_BRANCH := $(BINUTILS_BRANCH)
+binutils_REF := $(BINUTILS_REF)
 
 # shared newlib package, expected to be built once after linux toolchain is ready
 newlib_DIR := newlib
 newlib_REPO := https://github.com/$(GHUSER)/newlib-xtensa.git
-newlib_BRANCH := xtensa-4_5_0-lock-arduino
+newlib_REF := xtensa-4_5_0-lock-arduino
 
 # shared hal package, expected to be built once after linux toolchain is ready
 lx106-hal_DIR := lx106-hal
 lx106-hal_REPO := https://github.com/$(GHUSER)/lx106-hal.git
-lx106-hal_BRANCH := e4bcc63c9c016e4f8848e7e8f512438ca857531d
+lx106-hal_REF := e4bcc63c9c016e4f8848e7e8f512438ca857531d
 
 # extra packages intended for the target system, no need for cross-toolchain
 # TODO: split into a separate mkfile and build both lfs versions, let arduino repo handle seamless migration
 # MKSPIFFS must stay at 0.2.0 until Arduino boards.txt.py fixes non-page-aligned sizes
 mkspiffs_REPO := https://github.com/$(GHUSER)/mkspiffs.git
-mkspiffs_BRANCH := 0.2.0
-mkspiffs_VER := $(mkspiffs_BRANCH)
+mkspiffs_REF := 0.2.0
+mkspiffs_VER := $(mkspiffs_REF)
 mkspiffs_DIR := mkspiffs
 
 # MKLITTLEFS must be in sync with the Arduino littlefs version
 # 4.x.x pins littlefs==2.9.3, which cannot be read by littlefs<2.6.0
 mklittlefs_REPO := https://github.com/$(GHUSER)/mklittlefs.git
-mklittlefs_BRANCH := 4.0.2-littlefs251
+mklittlefs_REF := 4.0.2-littlefs251
 mklittlefs_VER := 4.0.2
 mklittlefs_DIR := mklittlefs
 
 # DEPRECATED 0.4.13 w/ cross-compilation adjustments
 esptool_REPO := https://github.com/$(GHUSER)/esptool-ck.git
-esptool_BRANCH := f80ae31d3b99eee41bd6a7fe6fdf4f889c1dc59b
+esptool_REF := f80ae31d3b99eee41bd6a7fe6fdf4f889c1dc59b
 esptool_VER := 0.4.13
 esptool_DIR := esptool
 
@@ -642,7 +642,7 @@ configure_newlib = \
 	$(CONFIGURE_NEWLIB)
 
 # The branch in which to store the new toolchain
-INSTALLBRANCH ?= master
+INSTALL_BRANCH ?= master
 
 # Environment variables for configure and building targets.  Only use $(call setenv,$@)
 ifeq ($(LTO),true)
@@ -826,16 +826,16 @@ clean: $(BUILD_TARGETS:%=.stage.%.clean)
 
 # Reset git repos to the initial state
 
-__gitrepo = $(or $$($(1)_REPO),$(error no git repo for $(1)))
+__gitrepo = $(or $($(1)_REPO),$(error no git repo for $(1)))
 gitrepo = $(call __gitrepo,$(call stem,$(1)))
 
-__gitbranch = $(or $($(1)_BRANCH),$(error no git branch for $(1)))
-gitbranch = $(call __gitbranch,$(call stem,$(1)))
+__gitref = $(or $($(1)_REF),$(error no git ref for $(1)))
+gitref = $(call __gitref,$(call stem,$(1)))
 
 __gitdir = $(or $($(1)_DIR),$(error no git dir for $(1)))
 gitdir = $(call __gitdir,$(call stem,$(1)))
 
-# GIT repos that would be cloned and checked out at the specific branch
+# GIT repos that would be cloned and checked out at the specific ref
 REPOS := gcc binutils newlib lx106-hal mkspiffs mklittlefs esptool
 
 .PHONY: .git.info .git.%.info .git.%.clone .git-reset-and-clean .git.%.reset-and-clean .git.fetch .git.%.fetch .git.checkout .git.%.checkout
@@ -845,54 +845,61 @@ REPOS := gcc binutils newlib lx106-hal mkspiffs mklittlefs esptool
 .git.%.info:
 	@echo '{ "name": "$(call stem,$@)"',
 	@echo '  "url": "$(call gitrepo,$@)"',
-	@echo '  "branch": "$(call gitbranch,$@)"',
+	@echo '  "ref": "$(call gitref,$@)"',
 	@echo '  "dir": "$(REPODIR)/$(call gitdir,$@)" }'
 
 .git.%.clone:
 	@echo $@
-	mkdir -p $(REPODIR)/
-	(test -d $(REPODIR)/$(call gitdir,$@) \
-		|| git clone \
-			--recurse-submodules \
-			--branch $(call gitbranch,$@) \
-			$(call gitrepo,$@) \
-			$(REPODIR)/$(call gitdir,$@) )
+	test -r $(REPODIR)/$(call gitdir,$@)/.git || \
+		(rm -rf $(REPODIR)/$(call gitdir,$@) \
+			&& mkdir -p $(REPODIR)/$(call gitdir,$@) \
+			&& cd $(REPODIR)/$(call gitdir,$@) \
+			&& git init \
+			&& git remote add origin $(call gitrepo,$@) \
+			&& git fetch origin $(call gitref,$@) \
+			&& git reset --recurse-submodules --hard $(call gitref,$@))
 
 # Completely clean out a git directory, removing any untracked files
 .git.reset-and-clean: $(REPOS:%=.git.%.reset-and-clean)
 
 .git.%.reset-and-clean:
 	@echo $@
-	-(test -d $(REPODIR)/$(call gitdir,$@)/.git \
+	-(test -r $(REPODIR)/$(call gitdir,$@)/.git \
 		&& cd $(REPODIR)/$(call gitdir,$@) \
 		&& git reset --hard --recurse-submodules \
 		&& git clean -x -f -d )
 
 clean: .git.reset-and-clean
 
-# Sync with the remote and checkout any required branches for existing clone
+# Sync with the remote and checkout any required tags or branches for existing clone
 .git.pull: $(REPOS:%=.git.%.pull)
 
 .git.%.pull:
 	@echo $@
-	test -d $(REPODIR)/$(call gitdir,$@)/.git
+	test -r $(REPODIR)/$(call gitdir,$@)/.git
+	# do not assume that % ref is a branch, attempt to fetch something first
 	(cd $(REPODIR)/$(call gitdir,$@) \
 		&& git reset --hard --recurse-submodules \
 		&& git clean -x -f -d \
-		&& ( git checkout $(call gitbranch,$@) \
-			|| ( git fetch origin $(call gitbranch,$@) && git checkout $(call gitbranch,$@)) \
-		&& git pull --recurse-submodules )
+		&& ( git checkout $(call gitref,$@) \
+			|| ( git fetch origin $(call gitref,$@) && git checkout $(call gitref,$@) )))
+	# in case gitref above was already a branch, first checkout already switched into it
+	# in case it was fetched, checkout creates a brand new local refs/heads/...
+	(cd $(REPODIR)/$(call gitdir,$@) \
+		&& ( git show-ref --quiet --verify "refs/heads/$(call gitref,$@)" \
+				&& git pull --recurse-submodules \
+				|| : ))
 
-# Checkout any required branches w/o syncing with the remote
+# Checkout any required tags or branches w/o syncing with the remote
 .git.checkout: $(REPOS:%=.git.%.checkout)
 
 .git.%.checkout: $(if $(NOFETCH),,.git.%.clone)
 	@echo $@
-	test -d $(REPODIR)/$(call gitdir,$@)/.git
+	test -r $(REPODIR)/$(call gitdir,$@)/.git
 	(cd $(REPODIR)/$(call gitdir,$@) \
 		&& git reset --hard --recurse-submodules \
 		&& git clean -x -f -d \
-		&& git checkout $(call gitbranch,$@) )
+		&& git checkout $(call gitref,$@) )
 
 # TODO: tarball support for humongous repos (gcc, binutils, etc.)
 # 		while very useful for development, not so much for just building
@@ -1064,7 +1071,7 @@ clean: .clean.overlay-core-isa-h
 .stage.mkspiffs.patch: .git.mkspiffs.checkout
 	@echo STAGE: $@
 	(cd $(REPODIR)/$(mkspiffs_DIR) && \
-		for p in $(PATCHDIR)/mkspiffs/$(mkspiffs_BRANCH)*.patch; do \
+		for p in $(PATCHDIR)/mkspiffs/$(mkspiffs_REF)*.patch; do \
 			$(call patch,$$p); \
 		done )
 
@@ -1270,7 +1277,7 @@ dll = $(or $($(call arch,$(1))_DLL),.so)
 
 .stage.%.binutils-post: .stage.%.binutils-make
 	@echo STAGE: $@
-ifneq ($(filter-out master binutils-2_32,$(BINUTILS_BRANCH)),)
+ifneq ($(filter-out master binutils-2_32,$(BINUTILS_REF)),)
 	rm -rf $(call arena,$@)/binutils/ld
 	mkdir -p $(call arena,$@)/binutils/ld
 	(cd $(call arena,$@)/binutils/ld \
@@ -1653,7 +1660,7 @@ endef
 
 .tool.%.mkspiffs: TOOL_NAME=mkspiffs
 .tool.%.mkspiffs: TOOL_DESC=spiffs-utility
-.tool.%.mkspiffs: TOOL_REL=$(mkspiffs_BRANCH)
+.tool.%.mkspiffs: TOOL_REL=$(mkspiffs_REF)
 .tool.%.mkspiffs: TOOL_PKGREL=0.$(call piominor,$(mkspiffs_VER)).$(DATESTAMP)$(SUBREL)
 .tool.%.mkspiffs: TOOL_DIR=$(mkspiffs_DIR)
 
@@ -1742,8 +1749,8 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 # if not explicitly set above, other targets expect
 # 1) system python being available i.e. /usr/bin/env python3
 # 2) system python being able to execute our script
-# later branches to either executing our other scripts through it, or using a different path set through environment variable
-# ref. python_via_env.py
+# 3) a) system python is used
+#    b) user-provided python is used, see python_via_env.py
 PYTHON_VIA_ENV_TARGETS := $(filter-out $(PYTHON_PACKAGE_TARGETS),$(BUILD_TARGETS))
 
 python-pkgdir = $(PKGDIR)/pkg.$(call arch,$@).python
@@ -1796,7 +1803,7 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 	@echo "-------- Preparing Arduino repo at $(ARDUINO)"
 	test -d $(ARDUINO) || \
 		git clone \
-			--branch $(INSTALLBRANCH) \
+			--branch $(INSTALL_BRANCH) \
 			--recurse-submodules tools/sdk/ssl \
 			--recurse-submodules tools/sdk/lwip2 \
 			https://github.com/$(GHUSER)/Arduino \
@@ -1804,7 +1811,7 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 	(cd $(ARDUINO) \
 		&& git reset --hard --recurse-submodules \
 		&& git clean -x -f -d \
-		&& git checkout $(INSTALLBRANCH) \
+		&& git checkout $(INSTALL_BRANCH) \
 		&& git pull --recurse-submodules )
 
 .arduino.tools: tools
@@ -1821,12 +1828,12 @@ ARDUINO_PKGFILE := $(ARDUINO)/package/package_esp8266com_index.template.json
 	./patch_json.py \
 		--pkgfile "$(ARDUINO_PKGFILE)" \
 		--tool mkspiffs \
-		--version "$(mkspiffs_BRANCH)+git$(REV)" \
+		--version "$(mkspiffs_REF)+git$(REV)" \
 		--glob '$(PKGDIR)/*.mkspiffs-*.json'
 	./patch_json.py \
 		--pkgfile "$(ARDUINO_PKGFILE)" \
 		--tool mklittlefs \
-		--version "$(subst -,_,$(mklittlefs_BRANCH))+git$(REV)" \
+		--version "$(subst -,_,$(mklittlefs_REF))+git$(REV)" \
 		--glob '$(PKGDIR)/*.mklittlefs-*.json'
 	./patch_json.py \
 		--pkgfile "$(ARDUINO_PKGFILE)" \
