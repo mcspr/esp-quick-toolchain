@@ -680,11 +680,21 @@ setenv = export \
 
 # in case host triplet is missing / cannot be discovered, ensure these are exported
 # for some cases, explicit variables are required before and after ./configure
-setenv_cross = export \
-	CC=$(or $($(call arch,$(1))_CC),$(call host,$(1))-gcc) \
-	CXX=$(or $($(call arch,$(1))_CXX),$(call host,$(1))-g++) \
-	STRIP=$(or $($(call arch,$(1))_STRIP),$(call host,$(1))-strip) \
+# defaults to gcc-gnu toolchain, modify through target variable when necessary
+setenv_cc = export CC=$(or $($(call arch,$(1))_CC),$(call host,$(1))-gcc)
+setenv_cxx = export CXX=$(or $($(call arch,$(1))_CXX),$(call host,$(1))-g++)
+
+# *expected* to be available, but not always needed. exported by default, assume targets override when necessary
+setenv_strip = export STRIP=$(or $($(call arch,$(1))_STRIP),$(call host,$(1))-strip)
+
+setenv_cross = \
+	$(call setenv_cc,$(1)) \
+	&& $(call setenv_cxx,$(1)) \
+	&& $(call setenv_strip,$(1)) \
 	&& $(call setenv,$(1))
+
+# *not expected* to be available, dont export by default to avoid confusing configure scripts and make
+setenv_objcopy = export OBJCOPY=$(or $($(call arch,$(1))_OBJCOPY),$(call host,$(1))-objcopy)
 
 # package 1) name 2) desc 3) version 4) architecture(s)
 # multiple architectures expected to be passed as a simple words list
@@ -1389,12 +1399,7 @@ endif
 		&& cp -v $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a ./) $(call log,$@)
 	touch $@
 
-.stage.%.strip: .stage.%.libstdcpp-nox
-	@echo STAGE: $@
-	$(MAKE) .tool.$(call arch,$@).toolchain-strip $(call log_stage,$@)
-	touch $@
-
-.stage.%.post: .stage.%.strip
+.stage.%.post: .stage.%.libstdcpp-nox
 	@echo STAGE: $@
 	for sh in $(POSTDIR)/gcc$(GCC)-*.sh $(POSTDIR)/gcc$(GCC_MAJOR)-*.sh; do \
 	    [ -x "$${sh}" ] || continue ; \
@@ -1413,56 +1418,52 @@ tools: $(BUILD_TARGETS:%=.tool.%.all)
 
 .PHONY: .tool.%.toolchain .tool.%.mkspiffs .tool.%.mklittlefs .tool.%.esptool .tool.%.python
 
-.PHONY: package-json .tool.%.toolchain-package-json
+.PHONY: package-json .toolchain.%.package-json
 
-package-json: .tool.LINUX.toolchain-package-json
+package-json: .toolchain.LINUX.package-json
 
 # package.json *should* be available in the install directory, allow symlink://... version spec for testing
-.tool.%.toolchain-package-json: TOOL_NAME=toolchain-xtensa
-.tool.%.toolchain-package-json: TOOL_DESC=GCC Toolchain for Xtensa processor
-.tool.%.toolchain-package-json: TOOL_PKGREL=$(PKGREL)
+.toolchain.%.package-json: TOOL_NAME=toolchain-xtensa
+.toolchain.%.package-json: TOOL_DESC=GCC Toolchain for Xtensa processor
+.toolchain.%.package-json: TOOL_PKGREL=$(PKGREL)
 
-.tool.%.toolchain-package-json: | .stage.%.done
+.toolchain.%.package-json: | .stage.%.done
 	@echo $@
 	rm -vf $(call install,$@)/package.json
 	(cd $(call install,$@) \
 		&& $(call make_package_json,$(TOOL_NAME),$(TOOL_DESC),$(TOOL_PKGREL),$(call asys,$@)) )
+	@echo JSON $(call install,$@)/package.json
 
-# implicit rule to be used in .stage.%.strip
-# assume .stage.%.done has been done at some point
+tool-toolchain-pkgdir = $(PKGDIR)/pkg.$(call arch,$@).toolchain
 
-.PHONY: .tool.%.toolchain-strip
-
-# manual `make install-strip` since this script never defines or uses $(STRIPPROG)
-# note that anything configuring through autotools *should* work with it
-
-# in case exe and dll suffixes are available, just match them instead of probing filetypes
-__tool_toolchain_find_exedll = \
-	-name '*$(call exe,$(1))' -o \
-	-name '*$(call dll,$(1))'
-
-# make sure to ignore some executable false-positives
-# - bogus mingw .dll.a (wat?)
-# - libtool archives
-# - shellscripts from gcc & gdb
-__tool_toolchain_find_generic = \
-	'!' -name '*.a' \
-	'!' -name '*.la' \
-	'!' -name '*.sh' \
-	'!' -exec sh -c "head -c32 {} | grep -q -e '\#!.*/bin/sh' -e '\#!.*/bin/env sh' -e '\#!.*/bin/env bash'" \;
-
-tool_toolchain_strip_find = \
-	find $(1) -type f -executable '(' \
-	$(if $(call exe,$(2))$(call dll,$(2)),$(call __tool_toolchain_find_exedll,$(2)),$(__tool_toolchain_find_generic)) \
-	')' -print0
-
-.tool.%.toolchain-strip:
+.toolchain.%.clean:
 	@echo $@
-	($(call setenv_cross,$@) \
-		&& ( $(call tool_toolchain_strip_find,\
-				$(call install,$@)/bin \
-				$(call install,$@)/lib/bfd-plugins \
-				$(call install,$@)/libexec/gcc/$(TARGET_ARCH),$@) | xargs -t -r -0 $$STRIP ))
+	-rm -rf $(tool-toolchain-pkgdir)
+	-rm -vf .toolchain.$(call stem,$@)*
+
+# both arduino & platformio share package archive structure with $(TARGET_ARCH) as root
+$(PKGDIR)/pkg.%.toolchain:
+	@echo $@
+	rm -rf $@
+	mkdir -p $@
+	cp -a $(call install,$@) $@/$(TARGET_ARCH)
+
+.PHONY: .toolchain.%.prepare .toolchain.%.force-prepare
+
+.toolchain.%.force-prepare:
+	@echo $@
+	$(MAKE) .toolchain.$(call stem,$@).clean
+	$(MAKE) $(tool-toolchain-pkgdir)
+
+.PHONY: .toolchain.%.remove-unused
+
+# remove files not intended for distribution
+.toolchain.%.remove-unused: | $(PKGDIR)/pkg.%.toolchain
+	@echo $@
+	# libtool library files are generated for both host and target
+	find $(tool-toolchain-pkgdir)/$(TARGET_ARCH) -type f -name '*.la' -delete
+	# static archives for host system building
+	find $(tool-toolchain-pkgdir)/$(TARGET_ARCH)/lib -type f -name '*.a' -delete
 
 # gathers license info from the top directory of the currently checked out repo / unpacked archive
 # note that output does not always represent which parts of the package are actually used
@@ -1487,45 +1488,111 @@ define tool_toolchain_copying
 
 endef
 
+.PHONY: .toolchain.%.copy-licenses
+
 # gather copying / license / legal info files from the declared repo/$name root directory
 # not everything declared beforehand is related to toolchain package, explicitly listing them near use
+.toolchain.%.copy-licenses: | $(PKGDIR)/pkg.%.toolchain
+	@echo $@
+	# license info. packaging limited to topdir, otherwise its the same as other tool recipes
+	$(foreach name,$(TOOLCHAIN_PACKAGES),$(call tool_toolchain_copying,$(tool-toolchain-pkgdir)/$(TARGET_ARCH)/share/licenses,$(name)))
+
+# in case exe and dll suffixes are available, just match them instead of probing filetypes
+__tool_toolchain_find_exedll = \
+	-name '*$(call exe,$(1))' -o \
+	-name '*$(call dll,$(1))'
+
+# make sure to ignore some executable false-positives
+# - host system static lib archives
+# - host system libtool library files
+# - shellscripts from gcc & gdb
+__tool_toolchain_find_generic = \
+	'!' -name '*.a' \
+	'!' -name '*.la' \
+	'!' -name '*.sh' \
+	'!' -exec sh -c "head -c32 {} | grep -q -e '\#!.*/bin/sh' -e '\#!.*/bin/env sh' -e '\#!.*/bin/env bash'" \;
+
+__tool_toolchain_strip_find = \
+	find $(1) -type f -executable '(' \
+	$(if $(and $(call exe,$(2)),$(call dll,$(2))),$(call __tool_toolchain_find_exedll,$(2)),$(__tool_toolchain_find_generic)) \
+	')' -print0
+
+tool-toolchain-strip-find = \
+	$(call __tool_toolchain_strip_find,\
+		$(tool-toolchain-pkgdir)/$(TARGET_ARCH)/bin \
+		$(tool-toolchain-pkgdir)/$(TARGET_ARCH)/lib/bfd-plugins \
+		$(tool-toolchain-pkgdir)/$(TARGET_ARCH)/libexec/gcc/$(TARGET_ARCH),$@)
+
+.PHONY: .install.%.toolchain-debuginfo
+
+.install.%.toolchain-debuginfo:
+	echo $@
+
+# experiment w/ debuginfo splitting, but only for host aka LINUX
+# beware that $$STRIP follows this recipe, debuglink either has to be combined or done manually after the fact
+.install.LINUX.toolchain-debuginfo:
+	echo $@
+	($(call setenv_objcopy,$@) \
+		&& ( cd $(tool-toolchain-pkgdir) && find ./ -name '*.debug' -delete ) \
+		&& ( $(tool-toolchain-strip-find) \
+			| xargs -n 1 -I {} -r -0 -- $$OBJCOPY --compress-debug-sections --only-keep-debug {} {}.debug ) \
+		&& export tarball=$(call __toolchain_tarball,$@)-debuginfo.tar \
+		&& rm -vf $(PKGDIR)/$(call host,$@).*-debuginfo.tar* \
+		&& ( cd $(tool-toolchain-pkgdir) \
+			&& ( find ./ -name '*.debug' -print0 \
+				| xargs -r -0 sh -c 'tar --null -C $(tool-toolchain-pkgdir) -c -T - -f $(PKGDIR)/$$tarball "$$@" && rm "$$@"' )))
+	@echo DBG $(PKGDIR)/$(call __toolchain_tarball,$@)-debuginfo.tar
+
+.PHONY: .toolchain.%.debuginfo
+
+.toolchain.%.debuginfo: | $(PKGDIR)/pkg.%.toolchain
+	@echo $@
+	$(MAKE) .install.$(call stem,$@).toolchain-debuginfo
+
+.PHONY: .toolchain.%.strip
+
+# manual `make install-strip` since this script never defines or uses $(STRIPPROG)
+# note that anything configuring through autotools *should* work with it
+.toolchain.%.strip: | $(PKGDIR)/pkg.%.toolchain
+	@echo $@
+	($(call setenv_strip,$@) \
+		&& ( $(tool-toolchain-strip-find) | xargs -r -0 $$STRIP ))
+
 TOOLCHAIN_GIT_REPOS := binutils gcc lx106-hal newlib
 TOOLCHAIN_PACKAGES := $(TOOLCHAIN_GIT_REPOS) gmp isl libexpat mpc mpfr ncurses
 
-toolchain_tarball = $(call host,$(1)).$(TARGET_ARCH)-gcc$(GCC)-eqt$(REL)$(SUBREL)-$(REV)$(call tarext,$(1))
+__toolchain_tarball = $(call host,$(1)).$(TARGET_ARCH)-gcc$(GCC)-eqt$(REL)$(SUBREL)-$(REV)
+toolchain_tarball = $(call __toolchain_tarball,$(1))$(call tarext,$(1))
 
-.PHONY: .tool.%.toolchain-tarball
+.PHONY: .toolchain.%.tarball
 
 # prepare full toolchain archive including binutils + gdb + gcc + newlib
 # recipe only has to copy staged build result from the target install dir
-.tool.%.toolchain-tarball: | .stage.%.done
+.toolchain.%.tarball: | $(PKGDIR)/pkg.%.toolchain
 	@echo $@
-	# both arduino & platformio share package archive structure with $(TARGET_ARCH) as root
-	mkdir -p $(PKGDIR)
-	rm -rf $(PKGDIR)/pkg.gcc.$(call arch,$@)
-	mkdir -p $(PKGDIR)/pkg.gcc.$(call arch,$@)
-	cp -a $(call install,$@) $(PKGDIR)/pkg.gcc.$(call arch,$@)/$(TARGET_ARCH)
-	# libtool archives. not intended for distribution
-	find $(PKGDIR)/pkg.gcc.$(call arch,$@)/$(TARGET_ARCH) -type f -name '*.la' -delete
-	# license info. packaging limited to topdir, otherwise its the same as other tool recipes
-	$(foreach name,$(TOOLCHAIN_PACKAGES),$(call tool_toolchain_copying,$(PKGDIR)/pkg.gcc.$(call arch,$@)/$(TARGET_ARCH)/share/licenses,$(name)))
 	# packaged artifact named a bit differently to help with clean-up name matching
 	# note that $(TARGET_ARCH)-gcc IS arduino internal name that is assigned to the toolchain
 	# (ref. arduino recipes below)
-	rm -vf $(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*
-	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call toolchain_tarball,$@)
+	rm -vf \
+		$(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*$(call tarext,$@) \
+		$(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*$(call tarext,$@).json
+	test -d $(tool-toolchain-pkgdir)/$(TARGET_ARCH)
 	(tarball=$(call toolchain_tarball,$@) \
-	    && cd $(PKGDIR)/pkg.gcc.$(call arch,$@) \
+	    && cd $(tool-toolchain-pkgdir) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TARGET_ARCH)/ \
 		&& cd $(PKGDIR) \
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
-	rm -rf $(PKGDIR)/pkg.gcc.$(call arch,$@)
+	@echo PKG $(PKGDIR)/$(call toolchain_tarball,$@)
 
 .tool.%.toolchain: | .stage.%.done
 	@echo $@
-	$(MAKE) .tool.$(call stem,$@).toolchain-strip
-	$(MAKE) .tool.$(call stem,$@).toolchain-package-json
-	$(MAKE) .tool.$(call stem,$@).toolchain-tarball
+	$(MAKE) .toolchain.$(call stem,$@).package-json
+	$(MAKE) .toolchain.$(call stem,$@).force-prepare
+	$(MAKE) .toolchain.$(call stem,$@).remove-unused
+	$(MAKE) .toolchain.$(call stem,$@).copy-licenses
+	$(MAKE) .toolchain.$(call stem,$@).strip
+	$(MAKE) .toolchain.$(call stem,$@).tarball
+	$(MAKE) .toolchain.$(call stem,$@).clean
 
 # other currently packaged tools depend only on the host toolchain
 
