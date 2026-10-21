@@ -818,7 +818,7 @@ endif
 ifneq ($(NOCLEAN),)
 	rm -vf $(patsubst .stage.%.clean,.stage.%*,$@)
 	rm -vf $(patsubst .stage.%.clean,log.stage.%*,$@)
-	rm -vrf $(PKGDIR)/pkg.*$(call arch,$@)*
+	rm -vrf $(PKGDIR)/pkg.$(call arch,$@)*
 	rm -vf $(PKGDIR)/$(call host,$@)*
 endif
 
@@ -1616,37 +1616,39 @@ define tool-build
 			$(TOOL_NAME)$(call exe,$@))
 endef
 
-tool_tarball = $(call host,$(1)).$(TOOL_NAME)-$(TOOL_REL).$(DATESTAMP)$(call tarext,$(1))
+tool-pkgdir = $(PKGDIR)/pkg.$(call arch,$@).$(TOOL_NAME)
 
 define tool-package-files
-(cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME) \
-	&& cp $(call arena,$@)/$(TOOL_DIR)/$(TOOL_NAME)$(call exe,$@) ./ )
+	(cd $(tool-pkgdir)/$(TOOL_NAME) \
+		&& cp $(call arena,$@)/$(TOOL_DIR)/$(TOOL_NAME)$(call exe,$@) ./ )
 endef
 
 define tool-package-copying
-	mkdir -p $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)/share/licenses/$(TOOL_NAME)
-	$(call copy_copying,$(call arena,$@)/$(TOOL_NAME),$(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)/share/licenses/$(TOOL_NAME),)
+	mkdir -p $(tool-pkgdir)/$(TOOL_NAME)/share/licenses/$(TOOL_NAME)
+	$(call copy_copying,$(call arena,$@)/$(TOOL_NAME),$(tool-pkgdir)/$(TOOL_NAME)/share/licenses/$(TOOL_NAME),)
 endef
+
+tool_tarball = $(call host,$(1)).$(TOOL_NAME)-$(TOOL_REL).$(DATESTAMP)$(call tarext,$(1))
 
 define tool-package-tarball
 	rm -vf $(PKGDIR)/$(call host,$@).$(TOOL_NAME)-*
 	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call tool_tarball,$@)
 	(tarball=$(call tool_tarball,$@) \
-		&& cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@) \
+		&& cd $(tool-pkgdir) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TOOL_NAME) \
 		&& cd $(PKGDIR) \
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
 endef
 
 define tool-package
-	rm -rf $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)
-	mkdir -p $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME)
-	(cd $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)/$(TOOL_NAME) \
+	rm -rf $(tool-pkgdir)
+	mkdir -p $(tool-pkgdir)/$(TOOL_NAME)
+	(cd $(tool-pkgdir)/$(TOOL_NAME) \
 		&& $(call make_package_json,$(TOOL_NAME),$(TOOL_DESC),$(TOOL_PKGREL),$(call asys,$@)) )
 	$(tool-package-files)
 	$(tool-package-copying)
 	$(tool-package-tarball)
-	rm -rf $(PKGDIR)/pkg.$(TOOL_NAME).$(call arch,$@)
+	rm -rf $(tool-pkgdir)
 endef
 
 .tool.%.mkspiffs: TOOL_NAME=mkspiffs
@@ -1744,13 +1746,15 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 # ref. python_via_env.py
 PYTHON_VIA_ENV_TARGETS := $(filter-out $(PYTHON_PACKAGE_TARGETS),$(BUILD_TARGETS))
 
+python-pkgdir = $(PKGDIR)/pkg.$(call arch,$@).python
+
 python_via_env_tarball = $(call host,$(1)).python-via-env$(call tarext,$(1))
 
 $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 	@echo $@
-	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
-	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
-	(cd $(PKGDIR)/pkg.python.$(call arch,$@) \
+	rm -rf $(python-pkgdir)
+	mkdir -p $(python-pkgdir)
+	(cd $(python-pkgdir) \
 		&& mkdir -p python3 \
 		&& touch python3/placeholder_for_arduino \
 		&& cp -v $(PWD)/python_via_env.py python3/python3 \
@@ -1758,11 +1762,11 @@ $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 	rm -vf $(PKGDIR)/$(call host,$@).python-*
 	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call python_via_env_tarball,$@)
 	(tarball=$(call python_via_env_tarball,$@) \
-		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
+		&& cd $(python-pkgdir) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
 		&& cd $(PKGDIR) \
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
-	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
+	rm -rf $(python-pkgdir)
 
 python_tarball = $(call host,$(1)).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(call tarext,$(1))
 
@@ -1772,19 +1776,19 @@ python_tarball = $(call host,$(1)).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(c
 # 4) repackage through tarcmd (TODO arduino-cli or spec really care?)
 $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python,LINUX).unpack
 	@echo $@
-	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
-	mkdir -p $(PKGDIR)/pkg.python.$(call arch,$@)
-	(cd $(PKGDIR)/pkg.python.$(call arch,$@) \
+	rm -rf $(python-pkgdir)
+	mkdir -p $(python-pkgdir)
+	(cd $(python-pkgdir) \
 		&& cp -r $(REPODIR)/$(call python_dir,$@) python3/ \
 		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py python3/ )
 	rm -vf $(PKGDIR)/$(call host,$@).python-*
 	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call python_tarball,$@)
 	(tarball=$(call python_tarball,$@) \
-		&& cd $(PKGDIR)/pkg.python.$(call arch,$@) \
+		&& cd $(python-pkgdir) \
 		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
 		&& cd $(PKGDIR) \
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
-	rm -rf $(PKGDIR)/pkg.python.$(call arch,$@)
+	rm -rf $(python-pkgdir)
 
 .PHONY: .arduino.%
 
