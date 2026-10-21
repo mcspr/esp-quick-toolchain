@@ -826,13 +826,13 @@ clean: $(BUILD_TARGETS:%=.stage.%.clean)
 
 # Reset git repos to the initial state
 
-__gitrepo = $(if $($(1)_REPO),$($(1)_REPO),$(error no git repo for $(1)))
+__gitrepo = $(or $$($(1)_REPO),$(error no git repo for $(1)))
 gitrepo = $(call __gitrepo,$(call stem,$(1)))
 
-__gitbranch = $(if $($(1)_BRANCH),$($(1)_BRANCH),$(error no git branch for $(1)))
+__gitbranch = $(or $($(1)_BRANCH),$(error no git branch for $(1)))
 gitbranch = $(call __gitbranch,$(call stem,$(1)))
 
-__gitdir = $(if $($(1)_DIR),$($(1)_DIR),$(error no git dir for $(1)))
+__gitdir = $(or $($(1)_DIR),$(error no git dir for $(1)))
 gitdir = $(call __gitdir,$(call stem,$(1)))
 
 # GIT repos that would be cloned and checked out at the specific branch
@@ -899,14 +899,14 @@ clean: .git.reset-and-clean
 # 		current archive unpack impl should behave similarly to git-clean
 
 # Packages usually just fetched & unpacked, there is no patching being done
-__pkgurl = $(if $($(1)_URL),$($(1)_URL),$(error no package url for $(1)))
+__pkgurl = $(or $($(1)_URL),$(error no package url for $(1)))
 pkgurl = $(call __pkgurl,$(call stem,$(1)))
 
-__pkgver = $(if $($(1)_VER),$($(1)_VER),$(error no package version for $(1)))
+__pkgver = $(or $($(1)_VER),$(error no package version for $(1)))
 pkgver = $(call __pkgver,$(call stem,$(1)))
 
 # expected output directory, should exist after recipe completes
-__pkgdir = $(if $($(1)_DIR),$($(1)_DIR),$(error no package dir for $(1)))
+__pkgdir = $(or $($(1)_DIR),$(error no package dir for $(1)))
 pkgdir = $(call __pkgdir,$(call stem,$(1)))
 
 # package top directory is not the same as the expected one, make sure to rename it
@@ -918,7 +918,7 @@ pkgarchive = $(call __pkgarchive,$(call stem,$(1)))
 
 __pkgsuffix = $(suffix $(call __pkgarchive,$(1)))
 __pkgfullsuffix = $(findstring .tar,$(call __pkgarchive,$(1)))$(call __pkgsuffix,$(1))
-__pkgext = $(if $(call __pkgfullsuffix,$(1)),$(call __pkgfullsuffix,$(1)),$(error no known archive extension for $(1)))
+__pkgext = $(or $(call __pkgfullsuffix,$(1)),$(error no known archive extension for $(1)))
 pkgext = $(call __pkgext,$(call stem,$(1)))
 
 .PHONY: .package.info .package.%.info .package.fetch .package.%.fetch .package.unpack .package.%.unpack .package.clean .package.%.clean
@@ -1696,8 +1696,8 @@ PYTHON_VERSION := 3.14.8
 __python_archive = cpython-$(PYTHON_VERSION)+$(PYTHON_RELEASE)-$(1)-install_only_stripped$(2)
 python_url = https://github.com/astral-sh/python-build-standalone/releases/download/$(PYTHON_RELEASE)/$(call __python_archive,$(1),$(2))
 
-__arch_python = $(if $($(1)_PYTHON),$($(1)_PYTHON),$(error no python defined for $(1)))
-__asys_python = $(if $($(1)_ASYS),$($(1)_ASYS),$(error no asys defined for $(1)))
+__arch_python = $(or $($(1)_PYTHON),$(error no python defined for $(1)))
+__asys_python = $(or $($(1)_ASYS),$(error no asys defined for $(1)))
 __python_dir = python-$(call __asys_python,$(1))-$(PYTHON_VERSION)
 python_dir = $(call __python_dir,$(call arch,$(1)))
 
