@@ -1072,6 +1072,13 @@ clean: .clean.overlay-core-isa-h
 			$(call patch,$$p); \
 		done )
 
+.stage.mklittlefs.patch: .git.mklittlefs.checkout
+	@echo STAGE: $@
+	(cd $(REPODIR)/$(mklittlefs_DIR) && \
+		for p in $(PATCHDIR)/mklittlefs/$(mklittlefs_REF)*.patch; do \
+			$(call patch,$$p); \
+		done )
+
 .stage.%.patch:
 	@echo $@
 
