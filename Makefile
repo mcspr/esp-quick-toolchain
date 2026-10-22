@@ -693,9 +693,6 @@ setenv_cross = \
 	&& $(call setenv_strip,$(1)) \
 	&& $(call setenv,$(1))
 
-# *not expected* to be available, dont export by default to avoid confusing configure scripts and make
-setenv_objcopy = export OBJCOPY=$(or $($(call arch,$(1))_OBJCOPY),$(call host,$(1))-objcopy)
-
 # package 1) name 2) desc 3) version 4) architecture(s)
 # multiple architectures expected to be passed as a simple words list
 __json_space:=$(subst ,, )
@@ -1406,7 +1403,12 @@ endif
 		&& cp -v $(call arena,$@)/$(gcc_DIR)/$(TARGET_ARCH)/libstdc++-v3-nox/src/.libs/libstdc++.a ./) $(call log,$@)
 	touch $@
 
-.stage.%.post: .stage.%.libstdcpp-nox
+.stage.%.strip: .stage.%.libstdcpp-nox
+	@echo STAGE: $@
+	$(MAKE) .install.$(call arch,$@).strip
+	touch $@
+
+.stage.%.post: .stage.%.strip
 	@echo STAGE: $@
 	for sh in $(POSTDIR)/gcc$(GCC)-*.sh $(POSTDIR)/gcc$(GCC_MAJOR)-*.sh; do \
 	    [ -x "$${sh}" ] || continue ; \
@@ -1424,6 +1426,66 @@ tools: $(BUILD_TARGETS:%=.tool.%.all)
 	@echo $@
 
 .PHONY: .tool.%.toolchain .tool.%.mkspiffs .tool.%.mklittlefs .tool.%.esptool .tool.%.python
+
+.PHONY: .install.%.debuginfo .install.%.strip
+
+# adjust find expression to find targets for $$STRIP
+# in case exe and dll suffixes are available, just match them instead of probing filetypes
+__tool_toolchain_find_exedll = \
+	-name '*$(call exe,$(1))' -o \
+	-name '*$(call dll,$(1))'
+
+# make sure to ignore some executable false-positives
+# - host system static lib archives
+# - host system libtool library files
+# - shellscripts from gcc & gdb
+__tool_toolchain_find_executables = \
+	'!' -name '*.a' \
+	'!' -name '*.la' \
+	'!' -name '*.sh' \
+	'!' -exec sh -c "head -c32 {} | grep -q -e '\#!.*/bin/sh' -e '\#!.*/bin/env sh' -e '\#!.*/bin/env bash'" \;
+
+__tool_toolchain_strip_find = \
+	find $(1) -type f -executable '(' \
+	$(if $(and $(call exe,$(2)),$(call dll,$(2))),$(call __tool_toolchain_find_exedll,$(2)),$(__tool_toolchain_find_executables)) \
+	')' -print0
+
+tool-toolchain-strip-find = \
+	$(call __tool_toolchain_strip_find,\
+		$(call install,$@)/bin \
+		$(call install,$@)/lib/bfd-plugins \
+		$(call install,$@)/libexec/gcc/$(TARGET_ARCH),$@)
+
+# todo: other linux target should also provide *-linux-gnu-objcopy, inject your arch if necessary
+# todo: mingw32 also provides *-w64-mingw32-objcopy, but requires mingw packages on target
+.install.%.debuginfo:
+	echo $@
+
+# assume that gdb session sets arena as `debug-file-directory`, which then allows searches inside of `$path/.build-id`
+install-debuginfo-dir := $(call arena,.stage.LINUX.binutils-make)/.build-id
+
+# experiment w/ debuginfo splitting, but only for host aka LINUX
+# see arena.x86_64/binutils/libbacktrace/install-debugifo-for-buildid.sh for the original script
+# - debug sections are compressed, which is not enabled by default; assume zlib
+# - destination file does not get overwritten; beware that $$STRIP follows, extraction cannot happen twice
+.install.LINUX.debuginfo:
+	echo $@
+	( $(tool-toolchain-strip-find) \
+		| xargs -n 1 -I {} -r -0 -- $(POSTDIR)/install-debuginfo-for-buildid.sh "$(install-debuginfo-dir)" {})
+
+# manual `make install-strip` since this script never defines or uses $(STRIPPROG)
+# note that anything configuring through autotools *should* work with it
+.install.%.strip: .install.%.debuginfo
+	@echo $@
+	($(call setenv_strip,$@) \
+		&& ( $(tool-toolchain-strip-find) | xargs -r -0 $$STRIP ))
+
+.PHONY: .toolchain.%.strip
+
+# no-op after staged build, re-run anyway to ensure any rebuilds continue w/ the stripped install dir
+.toolchain.%.strip:
+	@echo $@
+	$(MAKE) .install.$(call arch,$@).strip
 
 .PHONY: package-json .toolchain.%.package-json
 
@@ -1504,67 +1566,6 @@ endef
 	# license info. packaging limited to topdir, otherwise its the same as other tool recipes
 	$(foreach name,$(TOOLCHAIN_PACKAGES),$(call tool_toolchain_copying,$(tool-toolchain-pkgdir)/$(TARGET_ARCH)/share/licenses,$(name)))
 
-# in case exe and dll suffixes are available, just match them instead of probing filetypes
-__tool_toolchain_find_exedll = \
-	-name '*$(call exe,$(1))' -o \
-	-name '*$(call dll,$(1))'
-
-# make sure to ignore some executable false-positives
-# - host system static lib archives
-# - host system libtool library files
-# - shellscripts from gcc & gdb
-__tool_toolchain_find_generic = \
-	'!' -name '*.a' \
-	'!' -name '*.la' \
-	'!' -name '*.sh' \
-	'!' -exec sh -c "head -c32 {} | grep -q -e '\#!.*/bin/sh' -e '\#!.*/bin/env sh' -e '\#!.*/bin/env bash'" \;
-
-__tool_toolchain_strip_find = \
-	find $(1) -type f -executable '(' \
-	$(if $(and $(call exe,$(2)),$(call dll,$(2))),$(call __tool_toolchain_find_exedll,$(2)),$(__tool_toolchain_find_generic)) \
-	')' -print0
-
-tool-toolchain-strip-find = \
-	$(call __tool_toolchain_strip_find,\
-		$(tool-toolchain-pkgdir)/$(TARGET_ARCH)/bin \
-		$(tool-toolchain-pkgdir)/$(TARGET_ARCH)/lib/bfd-plugins \
-		$(tool-toolchain-pkgdir)/$(TARGET_ARCH)/libexec/gcc/$(TARGET_ARCH),$@)
-
-.PHONY: .install.%.toolchain-debuginfo
-
-.install.%.toolchain-debuginfo:
-	echo $@
-
-# experiment w/ debuginfo splitting, but only for host aka LINUX
-# beware that $$STRIP follows this recipe, debuglink either has to be combined or done manually after the fact
-.install.LINUX.toolchain-debuginfo:
-	echo $@
-	($(call setenv_objcopy,$@) \
-		&& ( cd $(tool-toolchain-pkgdir) && find ./ -name '*.debug' -delete ) \
-		&& ( $(tool-toolchain-strip-find) \
-			| xargs -n 1 -I {} -r -0 -- $$OBJCOPY --compress-debug-sections --only-keep-debug {} {}.debug ) \
-		&& export tarball=$(call __toolchain_tarball,$@)-debuginfo.tar \
-		&& rm -vf $(PKGDIR)/$(call host,$@).*-debuginfo.tar* \
-		&& ( cd $(tool-toolchain-pkgdir) \
-			&& ( find ./ -name '*.debug' -print0 \
-				| xargs -r -0 sh -c 'tar --null -C $(tool-toolchain-pkgdir) -c -T - -f $(PKGDIR)/$$tarball "$$@" && rm "$$@"' )))
-	@echo DBG $(PKGDIR)/$(call __toolchain_tarball,$@)-debuginfo.tar
-
-.PHONY: .toolchain.%.debuginfo
-
-.toolchain.%.debuginfo: | $(PKGDIR)/pkg.%.toolchain
-	@echo $@
-	$(MAKE) .install.$(call stem,$@).toolchain-debuginfo
-
-.PHONY: .toolchain.%.strip
-
-# manual `make install-strip` since this script never defines or uses $(STRIPPROG)
-# note that anything configuring through autotools *should* work with it
-.toolchain.%.strip: | $(PKGDIR)/pkg.%.toolchain
-	@echo $@
-	($(call setenv_strip,$@) \
-		&& ( $(tool-toolchain-strip-find) | xargs -r -0 $$STRIP ))
-
 TOOLCHAIN_GIT_REPOS := binutils gcc lx106-hal newlib
 TOOLCHAIN_PACKAGES := $(TOOLCHAIN_GIT_REPOS) gmp isl libexpat mpc mpfr ncurses
 
@@ -1594,6 +1595,7 @@ toolchain_tarball = $(call __toolchain_tarball,$(1))$(call tarext,$(1))
 .tool.%.toolchain: | .stage.%.done
 	@echo $@
 	$(MAKE) .toolchain.$(call stem,$@).package-json
+	$(MAKE) .toolchain.$(call stem,$@).strip
 	$(MAKE) .toolchain.$(call stem,$@).force-prepare
 	$(MAKE) .toolchain.$(call stem,$@).remove-unused
 	$(MAKE) .toolchain.$(call stem,$@).copy-licenses
