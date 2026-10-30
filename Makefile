@@ -1538,8 +1538,6 @@ $(PKGDIR)/pkg.%.toolchain:
 	@echo $@
 	# libtool library files are generated for both host and target
 	find $(tool-toolchain-pkgdir)/$(TARGET_ARCH) -type f -name '*.la' -delete
-	# static archives for host system building
-	find $(tool-toolchain-pkgdir)/$(TARGET_ARCH)/lib -type f -name '*.a' -delete
 
 # gathers license info from the top directory of the currently checked out repo / unpacked archive
 # note that output does not always represent which parts of the package are actually used
