@@ -45,6 +45,12 @@ class Windows:
         return self.root / "python.exe"
 
     @property
+    def bindir_entrypoint(
+        self,
+    ) -> pathlib.Path:  # backwards-compatible path missing from current distribution
+        return self.root / "python3.exe"
+
+    @property
     def stdlib_dir(self) -> pathlib.Path:
         return self.root / "Lib"
 
@@ -212,5 +218,8 @@ if __name__ == "__main__":
 
     bindir_entrypoint: pathlib.Path | None = getattr(handler, "bindir_entrypoint", None)
     if bindir_entrypoint:
-        print(f"Entrypoint {root}/python3")
-        handler.entrypoint.symlink_to(bindir_entrypoint.relative_to(root))
+        print(f"Entrypoint {bindir_entrypoint}")
+        if is_windows_dist(root):
+            handler.entrypoint.copy(bindir_entrypoint)
+        else:
+            handler.entrypoint.symlink_to(bindir_entrypoint.relative_to(root))
