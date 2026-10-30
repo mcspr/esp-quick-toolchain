@@ -62,7 +62,7 @@ class Windows:
     @property
     def pth_contents(self) -> str:
         out = []
-        out.append(f"./{self.stdlib_zip}")
+        out.append(f"./{self.stdlib_zip.name}")
         out.append("./DLLs")
         out.append(".")
         out.extend(PTH_TAIL)
