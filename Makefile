@@ -1773,6 +1773,8 @@ $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 		&& touch python3/placeholder_for_arduino \
 		&& cp -v $(PWD)/python_via_env.py python3/python3 \
 		&& chmod +x python3/python3 )
+	(cd $(python-pkgdir)/python3 \
+		&& ln -s python3 python)
 	rm -vf $(PKGDIR)/$(call host,$@).python-*
 	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call python_via_env_tarball,$@)
 	(tarball=$(call python_via_env_tarball,$@) \
