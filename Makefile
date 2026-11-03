@@ -853,8 +853,8 @@ REPOS := gcc binutils newlib lx106-hal mkspiffs mklittlefs esptool
 			&& cd $(REPODIR)/$(call gitdir,$@) \
 			&& git init \
 			&& git remote add origin $(call gitrepo,$@) \
-			&& git fetch origin $(call gitref,$@) \
-			&& git reset --recurse-submodules --hard $(call gitref,$@))
+			&& git fetch --recurse-submodules=yes origin $(call gitref,$@) \
+			&& git checkout --recurse-submodules $(call gitref,$@))
 
 # Completely clean out a git directory, removing any untracked files
 .git.reset-and-clean: $(REPOS:%=.git.%.reset-and-clean)
