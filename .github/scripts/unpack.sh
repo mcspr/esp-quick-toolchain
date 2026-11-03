@@ -3,7 +3,7 @@
 # Lazy retrieval of target package with minimal target info
 # Upload & release clean-up happens later, its not necessary to retrieve either archiveName or system/host
 
-set -e -u
+set -e -u -x
 
 dst="$1"
 

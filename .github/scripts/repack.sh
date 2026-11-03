@@ -3,7 +3,7 @@
 # Repackage unpack.sh results after modifications
 # Leave .json fragment management stuff for later
 
-set -e -u
+set -e -u -x
 
 src="$1"
 dst="$2"
@@ -19,7 +19,8 @@ for a in "$src"/* ; do
     -e "s/earlephilhower/mcspr/g" \
     "$a"/package.json
 
-  if [[ "$a" =~ "Windows" ]] ; then
+  archive=$(basename "$a")
+  if [[ "$archive" =~ "Windows" ]] ; then
     cmd="zip -rq"
     ext=".zip"
   else
@@ -28,7 +29,7 @@ for a in "$src"/* ; do
   fi
 
   mv "$a" xtensa-lx106-elf
-  $cmd "$dst"/"${a}-${new_ver}${ext}" xtensa-lx106-elf
+  $cmd "$dst"/"${archive}-${new_ver}${ext}" xtensa-lx106-elf
 
   rm -r xtensa-lx106-elf
 done
