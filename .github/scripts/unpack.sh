@@ -11,6 +11,7 @@ for system in Darwin Linux LinuxARM Windows ; do
   for bits in 32 64 ; do
     python get.py \
       --package-index-json package_esp8266com_index.template.json \
+      --no-progress \
       --system "$system" \
       --platform "" \
       --bits "$bits" \
@@ -20,5 +21,3 @@ for system in Darwin Linux LinuxARM Windows ; do
     fi
   done
 done
-
-popd
