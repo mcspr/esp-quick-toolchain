@@ -50,6 +50,8 @@ jobs:
             bash ${GITHUB_WORKSPACE}/builder/.github/scripts/uninstall_newlib_4.0.0.sh \
               "${GITHUB_WORKSPACE}/newlib-xtensa-4.0.0" \
               ./xtensa-lx106-elf
+
+            popd
           done
 
       - name: Prepare latest newlib
