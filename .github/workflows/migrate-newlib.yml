@@ -61,7 +61,7 @@ jobs:
           export NOLOG=1
           export GCC=10.3
 
-          cp -r ${GITHUB_WORKSPACE}/toolcain/tmp/Linux.64 xtensa-lx106-elf.x86_64
+          cp -r ${GITHUB_WORKSPACE}/toolchain/tmp/Linux.64 xtensa-lx106-elf.x86_64
 
           make .stage.newlib.patch
           make -W .stage.LINUX.gcc1-make .stage.LINUX.newlib-make
