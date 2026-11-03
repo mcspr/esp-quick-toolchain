@@ -32,4 +32,6 @@ for a in "$src"/* ; do
   $cmd "$dst"/"${archive}-${new_ver}${ext}" xtensa-lx106-elf
 
   rm -r xtensa-lx106-elf
+
+  popd
 done

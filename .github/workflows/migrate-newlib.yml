@@ -98,8 +98,6 @@ jobs:
             "$old_ver" \
             "$new_ver"
 
-          popd
-
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "packages/*.tar.gz,packages/*.zip"
