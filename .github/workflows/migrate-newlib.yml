@@ -62,6 +62,8 @@ jobs:
           export GCC=10.3
 
           cp -r ${GITHUB_WORKSPACE}/toolchain/tmp/Linux.64 xtensa-lx106-elf.x86_64
+          echo mcspr > .ghuser
+          echo mcspr > .ghtoken
 
           make .stage.newlib.patch
           make -W .stage.LINUX.gcc1-make .stage.LINUX.newlib-make
