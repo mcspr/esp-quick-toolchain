@@ -1,0 +1,101 @@
+name: Repackage legacy newlib version
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v7
+        with:
+          ref: build/gcc14
+          path: builder
+
+      - name: Checkout newlib 4.0.0
+        uses: actions/checkout@v7
+        with:
+          path: newlib-xtensa-4.0.0
+          repository: earlephilhower/newlib-xtensa
+          ref: xtensa-4_0_0-lock-arduino
+          submodules: false
+          fetch-depth: 1
+
+      - name: Toolchains
+        shell: bash
+        run: |
+          mkdir -p toolchain/
+          pushd toolchain/
+
+          for fremote in "package/package_esp8266com_index.template.json" "tools/get.py" ; do
+            flocal="${fremote##*/}"
+            curl \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              -H "Accept: application/vnd.github.VERSION.raw" \
+              -o "$flocal" \
+              https://api.github.com/repos/esp8266/Arduino/contents/$fremote
+          done
+
+          # w/ current tree DarwinARM is the same as Darwin
+          mkdir tmp
+          bash ${GITHUB_WORKSPACE}/builder/.github/scripts/unpack.sh tmp
+
+          for d in dist/* ; do
+            pushd "$d"
+
+            # root directory contains at least the platform header
+            rm -r xtensa-lx106-elf/include/xtensa
+
+            # everything else is under target prefix
+            bash ${GITHUB_WORKSPACE}/builder/.github/scripts/uninstall_newlib_4.0.0.sh \
+              "${GITHUB_WORKSPACE}/newlib-xtensa-4.0.0" \
+              ./xtensa-lx106-elf
+          done
+
+      - name: Prepare latest newlib
+        run: |
+          pushd builder
+
+          export NOLOG=1
+          export GCC=10.3
+
+          make .stage.newlib.patch
+          make -W .stage.LINUX.gcc1-make .stage.LINUX.newlib-make
+
+          popd
+
+      - name: Install newlib
+        shell: bash
+        run: |
+          pushd builder/arena.x86_64/newlib
+
+          for d in ${GITHUB_WORKSPACE}/toolchain/tmp/* ; do
+            make prefix="$f" install
+          done
+
+          popd
+
+      - name: Repackage
+        shell: bash
+        run: |
+          mkdir packages
+
+          date=$(date +%y%m%d)
+
+          old_ver="5.100300.230224"
+          new_ver="5.100300.${date}"
+
+          bash ${GITHUB_WORKSPACE}/builder/.github/scripts/repack.sh \
+            "${GITHUB_WORKSPACE}/toolchain/tmp" \
+            "${GITHUB_WORKSPACE}/packages" \
+            "$old_ver" \
+            "$new_ver"
+
+          popd
+
+      - uses: ncipollo/release-action
+        with:
+          artifacts: "packages/*.tar.gz,packages/*.zip"
+          tag: testing
+          draft: true
