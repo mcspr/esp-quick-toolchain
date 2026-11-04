@@ -1525,6 +1525,26 @@ $(PKGDIR)/pkg.%.toolchain:
 	mkdir -p $@
 	cp -a $(call install,$@) $@/$(TARGET_ARCH)
 
+.PRECIOUS: $(PKGDIR)/%.json
+
+package/%.json: $(PKGDIR)/%.json
+	@echo $@
+
+$(PKGDIR)/%.json:
+	test -f $(subst .json,,$@)
+	case "$(subst .json,,$(@F))" in \
+		$(LINUX_HOST)*) ahost=$(LINUX_AHOST) ;; \
+		$(LINUX32_HOST)*) ahost=$(LINUX32_AHOST) ;; \
+		$(ARM64_HOST)*) ahost=$(ARM64_AHOST) ;; \
+		$(RPI_HOST)*) ahost=$(RPI_AHOST) ;; \
+		$(WIN64_HOST)*) ahost=$(WIN64_AHOST) ;; \
+		$(WIN32_HOST)*) ahost=$(WIN32_AHOST) ;; \
+		$(MACOSX86_HOST)*) ahost=$(MACOSX86_AHOST) ;; \
+		$(MACOSARM_HOST)*) ahost=$(MACOSARM_AHOST) ;; \
+		*) echo "Unknown ahost $(@F)" >&2; exit 1 ;; \
+	esac && \
+	$(call make_releases_json,$(subst .json,,$@),$$ahost)
+
 .PHONY: .toolchain.%.prepare .toolchain.%.force-prepare
 
 .toolchain.%.force-prepare:
