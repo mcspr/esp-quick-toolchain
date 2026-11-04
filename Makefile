@@ -698,18 +698,18 @@ setenv_cross = \
 __json_space:=$(subst ,, )
 __json_sep:=$(subst ,,,\n    )
 define make_package_json
-echo '{\
-\n  "name": "'$(1)'",\
-\n  "description": "'$(2)'",\
-\n  "version": "'$(3)'",\
-\n  "repository": {\
-\n    "type": "git",\
-\n    "url": "https://github.com/$(GHUSER)/esp-quick-toolchain.git"\
-\n  },\
-\n  "system": [\
-\n    $(subst $(__json_space),$(__json_sep),$(patsubst %,"%",$(4)))\
-\n  ]\
-\n}' > package.json
+{ echo '{'; \
+	echo  '  "name": "'$(1)'",'; \
+	echo  '  "description": "'$(2)'",'; \
+	echo  '  "version": "'$(3)'",'; \
+	echo  '  "repository": {'; \
+	echo  '    "type": "git",'; \
+	echo  '    "url": "https://github.com/$(GHUSER)/esp-quick-toolchain.git"'; \
+	echo  '  },'; \
+	echo  '  "system": ['; \
+	echo  '    $(subst $(__json_space),$(__json_sep),$(patsubst %,"%",$(4)))'; \
+	echo  '  ]'; \
+	echo '}'; } > package.json
 endef
 
 # Generates a JSON fragment for an uploaded release artifact
