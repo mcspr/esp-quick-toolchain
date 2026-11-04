@@ -44,10 +44,10 @@ jobs:
             pushd "$d"
 
             # hal blob intended for prefix, will be rebuilt
-            rm -v xtensa-lx106-elf/lib/libhal.a
+            rm -v lib/libhal.a
 
             # root directory contains at least one prefix header
-            rm -vr xtensa-lx106-elf/include/xtensa
+            rm -vr include/xtensa
 
             # everything else is under target prefix
             bash ${GITHUB_WORKSPACE}/builder/.github/scripts/uninstall_newlib_4.0.0.sh \
