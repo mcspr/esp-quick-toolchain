@@ -103,9 +103,13 @@ jobs:
       - name: Repackage
         shell: bash
         run: |
-          mkdir -p builder/package
+          pushd builder
+          mkdir package
 
-          hash=${{ github.sha }}
+          hash=$(git rev-parse --short ${{ github.sha }})
+
+          popd
+
           date=$(date +%y%m%d)
 
           old_ver="5.100300.230224"
