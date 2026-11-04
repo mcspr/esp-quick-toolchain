@@ -95,7 +95,7 @@ jobs:
 
           export PATH="${GITHUB_WORKSPACE}/builder/xtensa-lx106-elf.x86_64/bin:${PATH}"
           for d in ${GITHUB_WORKSPACE}/toolchain/tmp/* ; do
-            make prefix="$d" install
+            make prefix="$d"/xtensa-lx106-elf install
           done
 
           popd
