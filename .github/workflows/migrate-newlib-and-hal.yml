@@ -72,7 +72,7 @@ jobs:
 
           make -W .stage.LINUX.gcc1-make -j$(nproc) \
             .stage.LINUX.newlib-make \
-            .stage.LINUX.lx106-hal
+            .stage.LINUX.hal-make
 
           popd
 
