@@ -698,32 +698,33 @@ setenv_cross = \
 __json_space:=$(subst ,, )
 __json_sep:=$(subst ,,,\n    )
 define make_package_json
-echo '{\
-\n  "name": "'$(1)'",\
-\n  "description": "'$(2)'",\
-\n  "version": "'$(3)'",\
-\n  "repository": {\
-\n    "type": "git",\
-\n    "url": "https://github.com/$(GHUSER)/esp-quick-toolchain.git"\
-\n  },\
-\n  "system": [\
-\n    $(subst $(__json_space),$(__json_sep),$(patsubst %,"%",$(4)))\
-\n  ]\
-\n}' > package.json
+{ echo '{'; \
+	echo  '  "name": "'$(1)'",'; \
+	echo  '  "description": "'$(2)'",'; \
+	echo  '  "version": "'$(3)'",'; \
+	echo  '  "repository": {'; \
+	echo  '    "type": "git",'; \
+	echo  '    "url": "https://github.com/$(GHUSER)/esp-quick-toolchain.git"'; \
+	echo  '  },'; \
+	echo  '  "system": ['; \
+	echo  '    $(subst $(__json_space),$(__json_sep),$(patsubst %,"%",$(4)))'; \
+	echo  '  ]'; \
+	echo '}'; } > package.json
 endef
 
 # Generates a JSON fragment for an uploaded release artifact
 # tarball 1) filename 2) host (aka architecture aka system aka AHOST)
 define make_releases_json
-tarballsize=$$(stat -c%s $(1)); \
-tarballsha256=$$(sha256sum $(1) | cut -f1 -d" "); \
-echo '{\
-\n  "host": "'$(2)'",\
-\n  "url": "https://github.com/$(GHUSER)/esp-quick-toolchain/releases/download/$(REL)$(SUBREL)/'$(1)'",\
-\n  "archiveFileName": "'$(1)'",\
-\n  "checksum": "SHA-256:'$${tarballsha256}'",\
-\n  "size": "'$${tarballsize}'"\
-\n}' > $(1).json
+tarballname=$$(basename $(1)) \
+ && tarballsize=$$(stat -c%s $(1)) \
+ && tarballsha256=$$(sha256sum $(1) | cut -f1 -d" ") \
+ && { echo '{'; \
+	 echo '  "host": "'$(2)'",'; \
+	 echo '  "url": "https://github.com/$(GHUSER)/esp-quick-toolchain/releases/download/$(REL)$(SUBREL)/'$${tarballname}'",'; \
+	 echo '  "archiveFileName": "'$${tarballname}'",'; \
+	 echo '  "checksum": "SHA-256:'$${tarballsha256}'",'; \
+	 echo '  "size": "'$${tarballsize}'"'; \
+	 echo '}'; } > $(1).json
 endef
 
 # The recipes begin here.
