@@ -715,15 +715,16 @@ endef
 # Generates a JSON fragment for an uploaded release artifact
 # tarball 1) filename 2) host (aka architecture aka system aka AHOST)
 define make_releases_json
-tarballsize=$$(stat -c%s $(1)); \
-tarballsha256=$$(sha256sum $(1) | cut -f1 -d" "); \
-echo '{\
-\n  "host": "'$(2)'",\
-\n  "url": "https://github.com/$(GHUSER)/esp-quick-toolchain/releases/download/$(REL)$(SUBREL)/'$(1)'",\
-\n  "archiveFileName": "'$(1)'",\
-\n  "checksum": "SHA-256:'$${tarballsha256}'",\
-\n  "size": "'$${tarballsize}'"\
-\n}' > $(1).json
+tarballname=$$(basename $(1)) \
+ && tarballsize=$$(stat -c%s $(1)) \
+ && tarballsha256=$$(sha256sum $(1) | cut -f1 -d" ") \
+ && { echo '{'; \
+	 echo '  "host": "'$(2)'",'; \
+	 echo '  "url": "https://github.com/$(GHUSER)/esp-quick-toolchain/releases/download/$(REL)$(SUBREL)/'$${tarballname}'",'; \
+	 echo '  "archiveFileName": "'$${tarballname}'",'; \
+	 echo '  "checksum": "SHA-256:'$${tarballsha256}'",'; \
+	 echo '  "size": "'$${tarballsize}'"'; \
+	 echo '}'; } > $(1).json
 endef
 
 # The recipes begin here.
@@ -1523,6 +1524,26 @@ $(PKGDIR)/pkg.%.toolchain:
 	rm -rf $@
 	mkdir -p $@
 	cp -a $(call install,$@) $@/$(TARGET_ARCH)
+
+.PRECIOUS: $(PKGDIR)/%.json
+
+package/%.json: $(PKGDIR)/%.json
+	@echo $@
+
+$(PKGDIR)/%.json:
+	test -f $(subst .json,,$@)
+	case "$(subst .json,,$(@F))" in \
+		$(LINUX_HOST)*) ahost=$(LINUX_AHOST) ;; \
+		$(LINUX32_HOST)*) ahost=$(LINUX32_AHOST) ;; \
+		$(ARM64_HOST)*) ahost=$(ARM64_AHOST) ;; \
+		$(RPI_HOST)*) ahost=$(RPI_AHOST) ;; \
+		$(WIN64_HOST)*) ahost=$(WIN64_AHOST) ;; \
+		$(WIN32_HOST)*) ahost=$(WIN32_AHOST) ;; \
+		$(MACOSX86_HOST)*) ahost=$(MACOSX86_AHOST) ;; \
+		$(MACOSARM_HOST)*) ahost=$(MACOSARM_AHOST) ;; \
+		*) echo "Unknown ahost $(@F)" >&2; exit 1 ;; \
+	esac && \
+	$(call make_releases_json,$(subst .json,,$@),$$ahost)
 
 .PHONY: .toolchain.%.prepare .toolchain.%.force-prepare
 

@@ -57,7 +57,7 @@ jobs:
             popd
           done
 
-      - name: Prepare latest newlib
+      - name: Prepare latest blobs
         run: |
           pushd builder
 
@@ -88,10 +88,22 @@ jobs:
 
           popd
 
+      - name: Install lx106-hal
+        shell: bash
+        run: |
+          pushd builder/arena.x86_64/lx106-hal
+
+          export PATH="${GITHUB_WORKSPACE}/builder/xtensa-lx106-elf.x86_64/bin:${PATH}"
+          for d in ${GITHUB_WORKSPACE}/toolchain/tmp/* ; do
+            make prefix="$d" install
+          done
+
+          popd
+
       - name: Repackage
         shell: bash
         run: |
-          mkdir packages
+          mkdir -P builder/package
 
           hash=${{ github.sha }}
           date=$(date +%y%m%d)
@@ -101,13 +113,29 @@ jobs:
 
           bash ${GITHUB_WORKSPACE}/builder/.github/scripts/repack.sh \
             "${GITHUB_WORKSPACE}/toolchain/tmp" \
-            "${GITHUB_WORKSPACE}/packages" \
+            "${GITHUB_WORKSPACE}/builder/package" \
             "$hash" \
             "$old_ver" \
             "$new_ver"
 
+      - name: Generate .json fragments for package index
+        run: |
+          pushd builder
+
+          for f in package/* ; do
+            make ${f}.json
+          done
+
+          python patch_json.py \
+            --pkgfile ${GITHUB_WORKSPACE}/toolchain/package_esp8266com_index.template.json \
+            --tool xtensa-lx106-elf-gcc \
+            --version testing \
+		        --glob 'package/*.xtensa-lx106-elf-gcc*.json'
+
+          popd
+
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "packages/*.tar.gz,packages/*.zip"
+          artifacts: "packages/*.tar.gz,packages/*.zip,toolchain/package_esp8266com_index.template.json"
           tag: testing
           draft: true

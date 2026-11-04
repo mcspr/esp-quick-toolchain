@@ -12,6 +12,8 @@ hash="$3"
 old_ver="$4"
 new_ver="$5"
 
+tool=xtensa-lx106-elf-gcc
+
 for a in "$src"/* ; do
   pushd "$src"
 
@@ -41,7 +43,7 @@ for a in "$src"/* ; do
   esac
 
   mv "$a" xtensa-lx106-elf
-  $cmd "$dst"/"${base}.xtensa-lx106-elf-${hash}.${new_ver}${ext}" xtensa-lx106-elf
+  $cmd "$dst"/"${base}.${tool}-${hash}.${new_ver}${ext}" xtensa-lx106-elf
 
   rm -r xtensa-lx106-elf
 
