@@ -124,7 +124,12 @@ jobs:
           pushd builder
 
           for f in package/* ; do
-            make ${f}.json
+            # macos binaries from repack are still compatible w/ 10.10
+            if [[ "$f" =~ "x86_64-apple-darwin14" ]] ; then
+              make MACOSX86_HOST=x86_64-apple-darwin14 ${f}.json
+            else
+              make ${f}.json
+            fi
           done
 
           python patch_json.py \
