@@ -119,6 +119,7 @@ jobs:
             "$new_ver"
 
       - name: Generate .json fragments for package index
+        shell: bash
         run: |
           pushd builder
 
@@ -130,7 +131,7 @@ jobs:
             --pkgfile ${GITHUB_WORKSPACE}/toolchain/package_esp8266com_index.template.json \
             --tool xtensa-lx106-elf-gcc \
             --version testing \
-		        --glob 'package/*.xtensa-lx106-elf-gcc*.json'
+            --glob 'package/*.xtensa-lx106-elf-gcc*.json'
 
           popd
 
