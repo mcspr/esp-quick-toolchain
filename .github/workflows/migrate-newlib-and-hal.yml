@@ -103,7 +103,7 @@ jobs:
       - name: Repackage
         shell: bash
         run: |
-          mkdir -P builder/package
+          mkdir -p builder/package
 
           hash=${{ github.sha }}
           date=$(date +%y%m%d)
