@@ -142,6 +142,6 @@ jobs:
 
       - uses: ncipollo/release-action@v1
         with:
-          artifacts: "packages/*.tar.gz,packages/*.zip,toolchain/package_esp8266com_index.template.json"
+          artifacts: "builder/package/*.tar.gz,builder/package/*.zip,toolchain/package_esp8266com_index.template.json"
           tag: testing
           draft: true
