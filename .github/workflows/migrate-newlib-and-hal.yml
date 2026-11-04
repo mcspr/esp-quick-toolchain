@@ -1,4 +1,4 @@
-name: Repackage legacy newlib version
+name: Repackage 3.2.0-gcc10.3
 
 on:
   workflow_dispatch:
@@ -43,8 +43,11 @@ jobs:
           for d in tmp/* ; do
             pushd "$d"
 
-            # root directory contains at least the platform header
-            rm -r xtensa-lx106-elf/include/xtensa
+            # hal blob intended for prefix, will be rebuilt
+            rm -v xtensa-lx106-elf/lib/libhal.a
+
+            # root directory contains at least one prefix header
+            rm -vr xtensa-lx106-elf/include/xtensa
 
             # everything else is under target prefix
             bash ${GITHUB_WORKSPACE}/builder/.github/scripts/uninstall_newlib_4.0.0.sh \
@@ -66,7 +69,10 @@ jobs:
           echo mcspr > .ghtoken
 
           make .stage.newlib.patch
-          make -W .stage.LINUX.gcc1-make -j$(nproc) .stage.LINUX.newlib-make
+
+          make -W .stage.LINUX.gcc1-make -j$(nproc) \
+            .stage.LINUX.newlib-make \
+            .stage.LINUX.lx106-hal
 
           popd
 
@@ -87,14 +93,16 @@ jobs:
         run: |
           mkdir packages
 
+          hash=${{ github.sha }}
           date=$(date +%y%m%d)
 
           old_ver="5.100300.230224"
-          new_ver="5.100300.${date}"
+          new_ver="2.100300.${date}"
 
           bash ${GITHUB_WORKSPACE}/builder/.github/scripts/repack.sh \
             "${GITHUB_WORKSPACE}/toolchain/tmp" \
             "${GITHUB_WORKSPACE}/packages" \
+            "$hash" \
             "$old_ver" \
             "$new_ver"
 
