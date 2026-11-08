@@ -2,6 +2,25 @@ name: Package 3.2.0-python3
 
 on:
   workflow_dispatch:
+    inputs:
+      rel:
+        type: string
+        required: true
+
+      subrel:
+        default: "-python3"
+        type: string
+        required: true
+
+      release:
+        default: "20261026"
+        type: string
+        required: true
+
+      python:
+        default: "3.14.10"
+        type: string
+        required: true
 
 jobs:
   build:
@@ -13,6 +32,7 @@ jobs:
           path: builder
 
       - name: esp8266/Arduino tools
+        id: tools
         shell: bash
         env:
           ESP8266_ARDUINO_FILES: "package/package_esp8266com_index.template.json"
@@ -20,14 +40,22 @@ jobs:
           mkdir -p tools/
           pushd tools/
 
+          ref=$(curl \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              https://api.github.com/repos/esp8266/Arduino/git/refs/heads/master \
+              | grep '"sha":' | awk '{ print $2} ' | tr -d '",')
+          echo "ref=${ref}" >> $GITHUB_OUTPUT
+
           for fremote in ${ESP8266_ARDUINO_FILES} ; do
             flocal="${fremote##*/}"
             curl \
               -H "Authorization: Bearer ${{ github.token }}" \
               -H "Accept: application/vnd.github.VERSION.raw" \
               -o "$flocal" \
-              https://api.github.com/repos/esp8266/Arduino/contents/$fremote
+              "https://api.github.com/repos/esp8266/Arduino/contents/${fremote}?ref=$[ref}"
           done
+
+          popd
 
       - name: Prepare latest blobs
         run: |
@@ -35,31 +63,55 @@ jobs:
 
           export NOLOG=1
 
-          export REL=3.2.0
-          export SUBREL=-python3
+          export REL=${{ inputs.rel }}
+          export SUBREL=${{ inputs.subrel }}
+
+          export PYTHON_RELEASE=${{ inputs.release }}
+          export PYTHON_VERSION=${{ inputs.python }}
 
           echo mcspr > .ghuser
           echo mcspr > .ghtoken
 
+          make .tool.python-fetch
+          make .tool.python-verify
           make .tool.python
 
           popd
 
       - name: Package
+        id: package
         shell: bash
         run: |
           pushd builder
 
+          version="${{ inputs.rel }}${{ inputs.subrel }}
+          echo "version=${version}" >> $GITHUB_OUTPUT
+
+          python="${{ inputs.python }}"
+          echo "python=${python}" >> $GITHUB_OUTPUT
+
+          release="${{ inputs.release }}"
+          echo "release=${release}" >> $GITHUB_OUTPUT
+
           python patch_json.py \
             --pkgfile ${GITHUB_WORKSPACE}/tools/package_esp8266com_index.template.json \
             --tool python3 \
-            --version 3.2.0-python3.14.10+20261026  \
+            --version "${version}${python}+${release}" \
             --glob 'package/*python*.json'
 
           popd
 
+      - name: Description
+        shell: bash
+        run: |
+          { echo "Prepared for ${{ steps.package.outputs.version }}"; \
+            echo "esp8266/Arduino package index .json template for https://github.com/esp8266/Arduino/commit/${{ steps.tools.outputs.ref }}"; \
+            echo "Original Python blobs available at https://github.com/astral-sh/python-build-standalone/releases/tag/${{ steps.package.outputs.release }}"; } \
+                                                                                                                                                                        > release.md
+
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "builder/package/*.tar.gz,builder/package/*.zip,tools/package_esp8266com_index.template.json"
-          tag: testing
+          bodyFile: release.md
+          tag: ${{ steps.package.outputs.version }}
           draft: true

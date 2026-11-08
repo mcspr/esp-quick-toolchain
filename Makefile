@@ -918,7 +918,7 @@ pkgdir = $(call __pkgdir,$(call stem,$(1)))
 pkgtopdir = $($(call stem,$(1))_TOPDIR)
 
 # note that current url schemes allow to extract it directly from the path
-__pkgarchive = $(lastword $(subst /, ,$(call __pkgurl,$(1))))
+__pkgarchive = $(or $($(1)_ARCHIVE),$(lastword $(subst /, ,$(call __pkgurl,$(1)))))
 pkgarchive = $(call __pkgarchive,$(call stem,$(1)))
 
 __pkgsuffix = $(suffix $(call __pkgarchive,$(1)))
@@ -1725,8 +1725,8 @@ endef
 
 # python sourced from astral-sh/python-build-standalone
 # note that some versions take the one from the system or environment
-PYTHON_RELEASE := 20261026
-PYTHON_VERSION := 3.14.10
+PYTHON_RELEASE ?= 20261026
+PYTHON_VERSION ?= 3.14.10
 
 __python_archive = cpython-$(PYTHON_VERSION)+$(PYTHON_RELEASE)-$(1)-install_only_stripped$(2)
 python_url = https://github.com/astral-sh/python-build-standalone/releases/download/$(PYTHON_RELEASE)/$(call __python_archive,$(1),$(2))
@@ -1772,9 +1772,28 @@ $(eval $(call python_package,MACOSARM,aarch64-apple-darwin))
 # expect host python to be available before running preparation script
 $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python,LINUX).unpack
 
-.PHONY: .tool.python .tool.%.python .tool.%.python-info
+.PHONY: .tool.python-fetch .tool.python-verify
+
+.tool.python-fetch: $(foreach target,$(PYTHON_PACKAGE_TARGETS),.package.python-$(call __arch_python,$(target)).fetch)
+
+.PHONY: .tool.python
 
 .tool.python: $(BUILD_TARGETS:%=.tool.%.python)
+
+.PHONY: .tool.python-verify
+
+python-sha256sums_URL := https://github.com/astral-sh/python-build-standalone/releases/download/$(PYTHON_RELEASE)/SHA256SUMS
+python-sha256sums_VER := $(PYTHON_RELEASE)
+python-sha256sums_DIR := $(REPODIR)
+python-sha256sums_SHA := 39af6e3d3c712476893409f714a3b9ab795a861a89ec1628cbc99b45d1271a73
+python-sha256sums_ARCHIVE := $(PYTHON_RELEASE).SHA256SUMS
+
+.tool.python-verify: .package.python-sha256sums.fetch .tool.python-fetch
+	( cd $(REPODIR) \
+		&& ( echo "$(python-sha256sums_SHA)  $(python-sha256sums_ARCHIVE)" | sha256sum --check ) \
+		&& sha256sum --check --ignore-missing $(python-sha256sums_ARCHIVE) )
+
+.PHONY: .tool.%.python .tool.%.python-info
 
 # if not explicitly set above, other targets expect
 # 1) system python being available i.e. /usr/bin/env python3
