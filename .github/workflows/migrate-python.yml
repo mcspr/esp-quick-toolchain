@@ -43,9 +43,10 @@ jobs:
           ref=$(curl \
               -H "Authorization: Bearer ${{ github.token }}" \
               https://api.github.com/repos/esp8266/Arduino/git/refs/heads/master \
-              | grep '"sha":' | awk '{ print $2} ' | tr -d '",')
+              | grep '"sha":' | awk '{ print $2 }' | tr -d '",')
           echo "ref=${ref}" >> $GITHUB_OUTPUT
 
+          echo $ref
           for fremote in ${ESP8266_ARDUINO_FILES} ; do
             flocal="${fremote##*/}"
             curl \
