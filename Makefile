@@ -1785,7 +1785,7 @@ PYTHON_VIA_ENV_TARGETS := $(filter-out $(PYTHON_PACKAGE_TARGETS),$(BUILD_TARGETS
 
 python-pkgdir = $(PKGDIR)/pkg.$(call arch,$@).python
 
-python_via_env_tarball = $(call host,$(1)).python-via-env$(call tarext,$(1))
+python_via_env_tarball = $(call ahost,$(1)).python-via-env$(call tarext,$(1))
 
 $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 	@echo $@
@@ -1798,7 +1798,7 @@ $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 		&& chmod +x python3/python3 )
 	(cd $(python-pkgdir)/python3 \
 		&& ln -s python3 python)
-	rm -vf $(PKGDIR)/$(call host,$@).python-*
+	rm -vf $(PKGDIR)/$(call ahost,$@).python-*
 	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call python_via_env_tarball,$@)
 	(tarball=$(call python_via_env_tarball,$@) \
 		&& cd $(python-pkgdir) \
@@ -1807,7 +1807,7 @@ $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
 	rm -rf $(python-pkgdir)
 
-python_tarball = $(call host,$(1)).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(call tarext,$(1))
+python_tarball = $(call ahost,$(1)).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(call tarext,$(1))
 
 # 1) prepare PyZipFile (aka pythonVER.zip) with immutable standard library pyc
 # 2) prepare pythonVER._pth pointing to PyZipFile and any relevant paths (Windows DLLs dir, current dir, etc.)
@@ -1820,7 +1820,7 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 	(cd $(python-pkgdir) \
 		&& cp -r $(REPODIR)/$(call python_dir,$@) python3/ \
 		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py python3/ )
-	rm -vf $(PKGDIR)/$(call host,$@).python-*
+	rm -vf $(PKGDIR)/$(call ahost,$@).python-*
 	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call python_tarball,$@)
 	(tarball=$(call python_tarball,$@) \
 		&& cd $(python-pkgdir) \
