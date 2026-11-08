@@ -34,6 +34,10 @@ jobs:
           pushd builder
 
           export NOLOG=1
+
+          export REL=3.2.0
+          export SUBREL=-python3
+
           echo mcspr > .ghuser
           echo mcspr > .ghtoken
 
@@ -49,7 +53,7 @@ jobs:
           python patch_json.py \
             --pkgfile ${GITHUB_WORKSPACE}/tools/package_esp8266com_index.template.json \
             --tool python3 \
-            --version 3.2.0-python3  \
+            --version 3.2.0-python3.14.10+20261026  \
             --glob 'package/*python*.json'
 
           popd
