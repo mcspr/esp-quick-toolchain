@@ -1725,8 +1725,8 @@ endef
 
 # python sourced from astral-sh/python-build-standalone
 # note that some versions take the one from the system or environment
-PYTHON_RELEASE := 20261009
-PYTHON_VERSION := 3.14.8
+PYTHON_RELEASE := 20261026
+PYTHON_VERSION := 3.14.10
 
 __python_archive = cpython-$(PYTHON_VERSION)+$(PYTHON_RELEASE)-$(1)-install_only_stripped$(2)
 python_url = https://github.com/astral-sh/python-build-standalone/releases/download/$(PYTHON_RELEASE)/$(call __python_archive,$(1),$(2))
