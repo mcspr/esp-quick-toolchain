@@ -1786,6 +1786,9 @@ python-sha256sums_ARCHIVE := $(PYTHON_RELEASE).SHA256SUMS
 .PHONY: .tool.python-fetch
 
 .tool.python-fetch: $(foreach target,$(PYTHON_PACKAGE_TARGETS),.package.python-$(call __arch_python,$(target)).fetch)
+.tool.python-fetch: .package.python-sha256sums.fetch
+
+.tool.python-fetch:
 	( cd $(REPODIR) \
 		&& sha256sum --check --ignore-missing $(python-sha256sums_ARCHIVE) )
 
