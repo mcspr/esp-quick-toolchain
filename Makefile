@@ -1772,7 +1772,9 @@ $(eval $(call python_package,MACOSARM,aarch64-apple-darwin))
 # expect host python to be available before running preparation script
 $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python,LINUX).unpack
 
-.PHONY: .tool.%.python .tool.%.python-info
+.PHONY: .tool.python .tool.%.python .tool.%.python-info
+
+.tool.python: $(BUILD_TARGETS:%=.tool.%.python)
 
 # if not explicitly set above, other targets expect
 # 1) system python being available i.e. /usr/bin/env python3
