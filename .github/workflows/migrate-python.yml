@@ -40,8 +40,8 @@ jobs:
           mkdir -p tools/
           pushd tools/
 
-          set -x
           ref=$(curl \
+              -H "Authorization: Bearer ${{ github.token }}" \
               https://api.github.com/repos/esp8266/Arduino/git/refs/heads/master \
               | grep '"sha":' | awk '{ print $2 }' | tr -d '",')
           echo "ref=${ref}" >> $GITHUB_OUTPUT
@@ -49,9 +49,10 @@ jobs:
           for fremote in ${ESP8266_ARDUINO_FILES} ; do
             flocal="${fremote##*/}"
             curl -v \
+              -H "Authorization: Bearer ${{ github.token }}" \
               -H "Accept: application/vnd.github.VERSION.raw" \
               -o "$flocal" \
-              "https://api.github.com/repos/esp8266/Arduino/contents/${fremote}?ref=$[ref}"
+              "https://api.github.com/repos/esp8266/Arduino/contents/${fremote}?ref=${ref}"
           done
 
           popd
