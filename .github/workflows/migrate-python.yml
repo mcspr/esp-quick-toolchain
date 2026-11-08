@@ -46,10 +46,9 @@ jobs:
               | grep '"sha":' | awk '{ print $2 }' | tr -d '",')
           echo "ref=${ref}" >> $GITHUB_OUTPUT
 
-          echo $ref
           for fremote in ${ESP8266_ARDUINO_FILES} ; do
             flocal="${fremote##*/}"
-            curl \
+            curl -v \
               -H "Authorization: Bearer ${{ github.token }}" \
               -H "Accept: application/vnd.github.VERSION.raw" \
               -o "$flocal" \
