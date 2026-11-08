@@ -1,0 +1,61 @@
+name: Package 3.2.0-python3
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v7
+        with:
+          path: builder
+
+      - name: esp8266/Arduino tools
+        shell: bash
+        env:
+          ESP8266_ARDUINO_FILES: "package/package_esp8266com_index.template.json"
+        run: |
+          mkdir -p tools/
+          pushd tools/
+
+          for fremote in ${ESP8266_ARDUINO_FILES} ; do
+            flocal="${fremote##*/}"
+            curl \
+              -H "Authorization: Bearer ${{ github.token }}" \
+              -H "Accept: application/vnd.github.VERSION.raw" \
+              -o "$flocal" \
+              https://api.github.com/repos/esp8266/Arduino/contents/$fremote
+          done
+
+      - name: Prepare latest blobs
+        run: |
+          pushd builder
+
+          export NOLOG=1
+          echo mcspr > .ghuser
+          echo mcspr > .ghtoken
+
+          make .tool.python
+
+          popd
+
+      - name: Package
+        shell: bash
+        run: |
+          pushd builder
+
+          python patch_json.py \
+            --pkgfile ${GITHUB_WORKSPACE}/tools/package_esp8266com_index.template.json \
+            --tool python3 \
+            --version 3.2.0-python3  \
+            --glob 'package/*python*.json'
+
+          popd
+
+      - uses: ncipollo/release-action@v1
+        with:
+          artifacts: "builder/package/*.tar.gz,builder/package/*.zip,toolchain/package_esp8266com_index.template.json"
+          tag: testing
+          draft: true
