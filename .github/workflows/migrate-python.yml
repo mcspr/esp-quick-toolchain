@@ -83,7 +83,7 @@ jobs:
         run: |
           pushd builder
 
-          version="${{ inputs.rel }}${{ inputs.subrel }}
+          version="${{ inputs.rel }}${{ inputs.subrel }}"
           echo "version=${version}" >> $GITHUB_OUTPUT
 
           python="${{ inputs.python }}"
