@@ -8,7 +8,7 @@ on:
         required: true
 
       subrel:
-        default: "-python3"
+        default: "-python"
         type: string
         required: true
 
@@ -63,11 +63,11 @@ jobs:
 
           export NOLOG=1
 
-          export REL=${{ inputs.rel }}
-          export SUBREL=${{ inputs.subrel }}
-
           export PYTHON_RELEASE=${{ inputs.release }}
           export PYTHON_VERSION=${{ inputs.python }}
+
+          export REL="${{ inputs.rel }}"
+          export SUBREL="${{ inputs.subrel }}${{ inputs.python }}+${{ inputs.release }}"
 
           echo mcspr > .ghuser
           echo mcspr > .ghtoken
@@ -83,19 +83,13 @@ jobs:
         run: |
           pushd builder
 
-          version="${{ inputs.rel }}${{ inputs.subrel }}"
+          version="${{ inputs.rel }}${{ inputs.subrel }}${{ inputs.python }}+${{ inputs.release }}"
           echo "version=${version}" >> $GITHUB_OUTPUT
-
-          python="${{ inputs.python }}"
-          echo "python=${python}" >> $GITHUB_OUTPUT
-
-          release="${{ inputs.release }}"
-          echo "release=${release}" >> $GITHUB_OUTPUT
 
           python patch_json.py \
             --pkgfile ${GITHUB_WORKSPACE}/tools/package_esp8266com_index.template.json \
             --tool python3 \
-            --version "${version}${python}+${release}" \
+            --version "${version}" \
             --glob 'package/*python*.json'
 
           popd
@@ -106,7 +100,7 @@ jobs:
           { echo "Prepared for ${{ steps.package.outputs.version }}"; \
             echo "esp8266/Arduino package index .json template for https://github.com/esp8266/Arduino/commit/${{ steps.tools.outputs.ref }}"; \
             echo "Original Python blobs available at https://github.com/astral-sh/python-build-standalone/releases/tag/${{ steps.package.outputs.release }}"; } \
-                                                                                                                                                                        > release.md
+          > release.md
 
       - uses: ncipollo/release-action@v1
         with:
