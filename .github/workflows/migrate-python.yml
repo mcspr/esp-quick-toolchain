@@ -8,16 +8,6 @@ on:
         type: string
         required: true
 
-      release:
-        default: "20261026"
-        type: string
-        required: true
-
-      python:
-        default: "3.14.10"
-        type: string
-        required: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -54,19 +44,23 @@ jobs:
           popd
 
       - name: Prepare latest blobs
+        id: blobs
         run: |
           pushd builder
 
           export NOLOG=1
 
-          export PYTHON_RELEASE=${{ inputs.release }}
-          export PYTHON_VERSION=${{ inputs.python }}
+          echo mcspr > .ghuser
+          echo mcspr > .ghtoken
+
+          export PYTHON_RELEASE=$(make .tool.python-release)
+          echo "python_release=${PYTHON_RELEASE}" >> $GITHUB_OUTPUT
+
+          export PYTHON_VERSION=$(make .tool.python-version)
+          echo "python_version=${PYTHON_VERSION}" >> $GITHUB_OUTPUT
 
           export REL=python${PYTHON_VERSION}
           export SUBREL=_${PYTHON_RELEASE}_${{ inputs.suffix }}
-
-          echo mcspr > .ghuser
-          echo mcspr > .ghtoken
 
           make .tool.python-fetch
           make .tool.python
@@ -79,7 +73,7 @@ jobs:
         run: |
           pushd builder
 
-          tag=python${{ inputs.python }}_${{ inputs.release }}_${{ inputs.suffix }}
+          tag=python${{ steps.blobs.outputs.python_version }}_${{ steps.blobs.outputs.python_release }}_${{ inputs.suffix }}
           echo "tag=${tag}" >> $GITHUB_OUTPUT
 
           python patch_json.py \
@@ -94,7 +88,7 @@ jobs:
         shell: bash
         run: |
           ref="https://github.com/esp8266/Arduino/commit/${{ steps.tools.outputs.ref }}"
-          blobs="https://github.com/astral-sh/python-build-standalone/releases/tag/${{ inputs.release }}"
+          blobs="https://github.com/astral-sh/python-build-standalone/releases/tag/${{ steps.blobs.outputs.python_release }}"
 
           { echo "$(date +%y-%m-%d) - ${{ steps.package.outputs.tag }}"; \
             echo "esp8266/Arduino package index .json template for ${ref}"; \

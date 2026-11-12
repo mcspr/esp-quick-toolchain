@@ -1729,8 +1729,18 @@ endef
 
 # python sourced from astral-sh/python-build-standalone
 # note that some versions take the one from the system or environment
-PYTHON_RELEASE ?= 20261026
-PYTHON_VERSION ?= 3.14.10
+PYTHON_RELEASE := 20261110
+PYTHON_VERSION := 3.14.10
+
+.PHONY: .tool.python-release
+
+.tool.python-release:
+	@echo $(PYTHON_RELEASE)
+
+.PHONY: .tool.python-version
+
+.tool.python-version:
+	@echo $(PYTHON_VERSION)
 
 __python_archive = cpython-$(PYTHON_VERSION)+$(PYTHON_RELEASE)-$(1)-install_only_stripped$(2)
 python_url = https://github.com/astral-sh/python-build-standalone/releases/download/$(PYTHON_RELEASE)/$(call __python_archive,$(1),$(2))
@@ -1780,7 +1790,7 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 python-sha256sums_URL := https://github.com/astral-sh/python-build-standalone/releases/download/$(PYTHON_RELEASE)/SHA256SUMS
 python-sha256sums_VER := $(PYTHON_RELEASE)
 python-sha256sums_DIR := $(REPODIR)
-python-sha256sums_SHA := 39af6e3d3c712476893409f714a3b9ab795a861a89ec1628cbc99b45d1271a73
+python-sha256sums_SHA := 72e29bd6b86194d64eca565416c3cd527c7d41260b445ed56e0f3e721e825e45
 python-sha256sums_ARCHIVE := $(PYTHON_RELEASE).SHA256SUMS
 
 .PHONY: .tool.python-fetch
