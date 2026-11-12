@@ -3,12 +3,8 @@ name: Package 3.2.0-python3
 on:
   workflow_dispatch:
     inputs:
-      rel:
-        type: string
-        required: true
-
-      subrel:
-        default: "-python"
+      suffix:
+        default: "v1"
         type: string
         required: true
 
@@ -66,8 +62,8 @@ jobs:
           export PYTHON_RELEASE=${{ inputs.release }}
           export PYTHON_VERSION=${{ inputs.python }}
 
-          export REL="${{ inputs.rel }}"
-          export SUBREL="${{ inputs.subrel }}${{ inputs.python }}+${{ inputs.release }}"
+          export REL=python${PYTHON_VERSION}
+          export SUBREL=_${PYTHON_RELEASE}_${{ inputs.suffix }}
 
           echo mcspr > .ghuser
           echo mcspr > .ghtoken
@@ -83,13 +79,13 @@ jobs:
         run: |
           pushd builder
 
-          version="${{ inputs.rel }}${{ inputs.subrel }}${{ inputs.python }}+${{ inputs.release }}"
-          echo "version=${version}" >> $GITHUB_OUTPUT
+          tag=python${{ inputs.python }}_${{ inputs.release }}_${{ inputs.suffix }}
+          echo "tag=${tag}" >> $GITHUB_OUTPUT
 
           python patch_json.py \
             --pkgfile ${GITHUB_WORKSPACE}/tools/package_esp8266com_index.template.json \
             --tool python3 \
-            --version "${version}" \
+            --version "${tag}" \
             --glob 'package/*python*.json'
 
           popd
@@ -97,14 +93,17 @@ jobs:
       - name: Description
         shell: bash
         run: |
-          { echo "Prepared for ${{ steps.package.outputs.version }}"; \
-            echo "esp8266/Arduino package index .json template for https://github.com/esp8266/Arduino/commit/${{ steps.tools.outputs.ref }}"; \
-            echo "Original Python blobs available at https://github.com/astral-sh/python-build-standalone/releases/tag/${{ steps.package.outputs.release }}"; } \
+          ref="https://github.com/esp8266/Arduino/commit/${{ steps.tools.outputs.ref }}"
+          blobs="https://github.com/astral-sh/python-build-standalone/releases/tag/${{ inputs.release }}"
+
+          { echo "$(date +%y-%m-%d) - ${{ steps.package.outputs.tag }}"; \
+            echo "esp8266/Arduino package index .json template for ${ref}"; \
+            echo "Original Python blobs available at ${blobs}"; } \
           > release.md
 
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "builder/package/*.tar.gz,builder/package/*.zip,tools/package_esp8266com_index.template.json"
           bodyFile: release.md
-          tag: ${{ steps.package.outputs.version }}
+          tag: ${{ steps.package.outputs.tag }}
           draft: true
