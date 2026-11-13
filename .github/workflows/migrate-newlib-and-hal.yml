@@ -47,7 +47,7 @@ jobs:
           popd
 
           for d in ${GITHUB_WORKSPACE}/builder/package/* ; do
-            pushd "$d"
+            pushd "$d"/xtensa-lx106-elf
 
             # hal blob intended for prefix, will be rebuilt
             rm -v lib/libhal.a
@@ -88,8 +88,8 @@ jobs:
           pushd builder/arena.x86_64/newlib
 
           export PATH="${GITHUB_WORKSPACE}/builder/xtensa-lx106-elf.x86_64/bin:${PATH}"
-          for d in ${GITHUB_WORKSPACE}/builder/package/*/xtensa-lx106-elf ; do
-            make prefix="$d" install
+          for d in ${GITHUB_WORKSPACE}/builder/package/* ; do
+            make prefix="$d"/xtensa-lx106-elf install
           done
 
           popd
@@ -100,8 +100,8 @@ jobs:
           pushd builder/arena.x86_64/lx106-hal
 
           export PATH="${GITHUB_WORKSPACE}/builder/xtensa-lx106-elf.x86_64/bin:${PATH}"
-          for d in ${GITHUB_WORKSPACE}/builder/package/*/xtensa-lx106-elf ; do
-            make prefix="$d"/xtensa-lx106-elf install
+          for d in ${GITHUB_WORKSPACE}/builder/package/* ; do
+            make prefix="$d"/xtensa-lx106-elf/xtensa-lx106-elf install
           done
 
           popd
