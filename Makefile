@@ -1870,7 +1870,7 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 	mkdir -p $(python-pkgdir)
 	(cd $(python-pkgdir) \
 		&& cp -r $(REPODIR)/$(call python_dir,$@) python3/ \
-		&& find python3/ -name '*.pyc' -print -delete \
+		&& find python3/ -name '*.pyc' -delete \
 		&& $(zip_PRE) \
 		&& env TZ=UTC SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
 			$(REPODIR)/$(call __python_dir,LINUX)/bin/python3 \
