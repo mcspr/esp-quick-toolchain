@@ -208,8 +208,7 @@ if __name__ == "__main__":
         with PyZipFile(
             stdlib_zip, mode="w", compression=zipfile.ZIP_DEFLATED
         ) as zip_archive:
-            if zip_archive.compresslevel is not None:
-                zip_archive.compresslevel = 9
+            zip_archive.compresslevel = 9
             for p in sorted(handler.stdlib_dir.iterdir()):
                 p = p.resolve()
 
