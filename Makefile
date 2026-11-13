@@ -1906,33 +1906,33 @@ ARDUINO_PKGFILE := $(ARDUINO)/package/package_esp8266com_index.template.json
 .arduino.package-template-json: .arduino.toolchain-template-json
 .arduino.toolchain-template-json:
 	./patch_json.py \
-		--pkgfile "$(ARDUINO_PKGFILE)" \
-		--tool $(TARGET_ARCH)-gcc \
-		--version "$(VERSION)" \
+		--pkgfile '$(ARDUINO_PKGFILE)' \
+		--tool '$(TARGET_ARCH)-gcc' \
+		--version '$(VERSION)' \
 		--glob '$(PKGDIR)/*.$(TARGET_ARCH)-gcc*.json'
 
 .arduino.package-template-json: .arduino.mkspiffs-template-json
 .arduino.mkspiffs-template-json:
 	./patch_json.py \
-		--pkgfile "$(ARDUINO_PKGFILE)" \
+		--pkgfile '$(ARDUINO_PKGFILE)' \
 		--tool mkspiffs \
-		--version "$(mkspiffs_REF)+git$(REV)" \
+		--version '$(mkspiffs_REF)+git$(REV)' \
 		--glob '$(PKGDIR)/*.mkspiffs-*.json'
 
 .arduino.package-template-json: .arduino.mklittlefs-template-json
 .arduino.mklittlefs-template-json:
 	./patch_json.py \
-		--pkgfile "$(ARDUINO_PKGFILE)" \
+		--pkgfile '$(ARDUINO_PKGFILE)' \
 		--tool mklittlefs \
-		--version "$(subst -,_,$(mklittlefs_REF))+git$(REV)" \
+		--version '$(subst -,_,$(mklittlefs_REF))+git$(REV)' \
 		--glob '$(PKGDIR)/*.mklittlefs-*.json'
 
 .arduino.package-template-json: .arduino.python-template-json
 .arduino.python-template-json:
 	./patch_json.py \
-		--pkgfile "$(ARDUINO_PKGFILE)" \
+		--pkgfile '$(ARDUINO_PKGFILE)' \
 		--tool python3 \
-		--version "$(PYTHON_VERSION)+$(PYTHON_RELEASE)" \
+		--version '$(PYTHON_VERSION)+$(PYTHON_RELEASE)' \
 		--glob '$(PKGDIR)/*python*$(PYTHON_VERSION)+$(PYTHON_RELEASE)*.json' \
 		--glob '$(PKGDIR)/*python-via-env*.json'
 

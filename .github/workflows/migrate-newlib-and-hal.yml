@@ -120,7 +120,7 @@ jobs:
 
           # current makefile separates release tagging from the core
           export DATESTAMP=$(date --utc +%y%m%d)
-          export TAG=$(REL)-gcc10.3-$(DATESTAMP)-${{ inputs.suffix }}
+          export TAG=${REL}-gcc10.3-${DATESTAMP}-${{ inputs.suffix }}
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
           for t in LINUX LINUX32 ARM64 RPI WIN64 WIN32 MACOSX86 ; do
