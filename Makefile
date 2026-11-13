@@ -30,7 +30,9 @@ REV ?= $(call rev,$(PWD))
 # (note that this is THE format used in the esp8266/Arduino package index .json; SUBREL is empty for release)
 VERSION := $(REL)$(SUBREL)-gcc$(GCC)-$(REV)
 
-DATESTAMP ?= $(shell date +%y%m%d)
+# fixed time value for internal operations on files / fixed package versions
+DATESTAMP ?= $(shell date --utc +%y%m%d)
+SOURCE_DATE_EPOCH ?= $(shell date --utc --date=$(DATESTAMP) +%s)
 
 # For downloading FROM Github, only GHUSER must be set
 # For uploading TO Github, both GHUSER and GHTOKEN must be set
@@ -257,22 +259,44 @@ BUILD_TARGETS := LINUX LINUX32 ARM64 RPI WIN64 WIN32 MACOSARM MACOSX86
 #   like .gz, supported by both build systems
 # * .xz is much better at compression than all options above, but awfully slow
 #   like .gz & .bz2, supported by both build systems
-TARCMD := tar
-TAROPT := zcf
-TAREXT := .tar.gz
+
+# ref. https://reproducible-builds.org/docs/archives
+# remove any extra attributes and use fixed filemode and ownership info
+tar_PRE := :
+tar_CMD := tar
+tar_OPT := \
+	--sort=name \
+	--mtime='@$(SOURCE_DATE_EPOCH)' \
+	--owner=0 \
+	--group=0 \
+	--numeric-owner \
+	--pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime \
+	--gzip \
+	--create \
+	--file
+tar_EXT := .tar.gz
+
+# .zip only for Windows targets
+# ref. https://reproducible-builds.org/docs/archives/#zip-files
+zip_PRE := \
+	find ./ -print0 | xargs -0r touch --time=mtime --no-dereference --date='@$(SOURCE_DATE_EPOCH)'
+zip_CMD := zip
+zip_OPT := \
+	--quiet \
+	--recurse-paths \
+	--strip-extra
+zip_EXT := .zip
 
 # Define the build and output naming, don't use directly (see below)
 # Currently not using ..._STATIC / -Wl,-static, its up to the tools
 #
-# ..._HOST   - build system target triplet
-# ..._AHOST  - arduino manifest architecture name
-# ..._ASYS   - platformio manifest system name(s)
-# ..._EXT    - toolchain name suffix
-# ..._EXE    - toolchain executable files suffix
-# ..._MKTGT  - tool target os hint
-# ..._TARCMD - release archive compression tool (optional, see $(TARCMD))
-# ..._TAROPT - compression tool command line options (optional, see $(TAROPT))
-# ..._TAREXT - release archive file suffix (optional, see $(TAREXT))
+# ..._HOST    - build system target triplet
+# ..._AHOST   - arduino manifest architecture name
+# ..._ASYS    - platformio manifest system name(s)
+# ..._EXT     - toolchain name suffix
+# ..._EXE     - toolchain executable files suffix
+# ..._MKTGT   - tool target os hint
+# ..._ARCHIVE - release archive&compression tool (optional, see $(ARCHIVE); TAR by default)
 #
 LINUX_HOST   := x86_64-linux-gnu
 LINUX_AHOST  := x86_64-pc-linux-gnu
@@ -302,25 +326,21 @@ RPI_EXT    := .rpi
 RPI_EXE    :=
 RPI_MKTGT  := linux
 
-WIN64_HOST   := x86_64-w64-mingw32
-WIN64_AHOST  := x86_64-mingw32
-WIN64_ASYS   := windows_amd64
-WIN64_EXT    := .win64
-WIN64_EXE    := .exe
-WIN64_MKTGT  := windows
-WIN64_TARCMD := zip
-WIN64_TAROPT := -rq
-WIN64_TAREXT := .zip
+WIN64_HOST    := x86_64-w64-mingw32
+WIN64_AHOST   := x86_64-mingw32
+WIN64_ASYS    := windows_amd64
+WIN64_EXT     := .win64
+WIN64_EXE     := .exe
+WIN64_MKTGT   := windows
+WIN64_ARCHIVE := zip
 
-WIN32_HOST   := i686-w64-mingw32
-WIN32_AHOST  := i686-mingw32
-WIN32_ASYS   := windows_x86
-WIN32_EXT    := .win32
-WIN32_EXE    := .exe
-WIN32_MKTGT  := windows
-WIN32_TARCMD := zip
-WIN32_TAROPT := -rq
-WIN32_TAREXT := .zip
+WIN32_HOST    := i686-w64-mingw32
+WIN32_AHOST   := i686-mingw32
+WIN32_ASYS    := windows_x86
+WIN32_EXT     := .win32
+WIN32_EXE     := .exe
+WIN32_MKTGT   := windows
+WIN32_ARCHIVE := zip
 
 MACOSX86_HOST   := x86_64-apple-darwin20.4
 MACOSX86_AHOST  := x86_64-apple-darwin
@@ -385,9 +405,10 @@ ext    = $($(call arch,$(1))_EXT)
 exe    = $($(call arch,$(1))_EXE)
 mktgt  = $($(call arch,$(1))_MKTGT)
 
-tarcmd = $(or $($(call arch,$(1))_TARCMD),$(TARCMD))
-taropt = $(or $($(call arch,$(1))_TAROPT),$(TAROPT))
-tarext = $(or $($(call arch,$(1))_TAREXT),$(TAREXT))
+archivepre = $(or $($($(call arch,$(1))_ARCHIVE)_PRE),$(tar_PRE))
+archivecmd = $(or $($($(call arch,$(1))_ARCHIVE)_CMD),$(tar_CMD))
+archiveopt = $(or $($($(call arch,$(1))_ARCHIVE)_OPT),$(tar_OPT))
+archiveext = $(or $($($(call arch,$(1))_ARCHIVE)_EXT),$(tar_EXT))
 
 # DO NOT generate log files w/ NOLOG=1
 # expected to be at the end of *some* command printing to stdout/stderr
@@ -713,17 +734,17 @@ define make_package_json
 endef
 
 # Generates a JSON fragment for an uploaded release artifact
-# tarball 1) filename 2) host (aka architecture aka system aka AHOST)
+# archive 1) filename 2) host (aka architecture aka system aka AHOST)
 define make_releases_json
-tarballname=$$(basename $(1)) \
- && tarballsize=$$(stat -c%s $(1)) \
- && tarballsha256=$$(sha256sum $(1) | cut -f1 -d" ") \
+archivename=$$(basename $(1)) \
+ && archivesize=$$(stat -c%s $(1)) \
+ && archivesha256=$$(sha256sum $(1) | cut -f1 -d" ") \
  && { echo '{'; \
 	 echo '  "host": "'$(2)'",'; \
-	 echo '  "url": "https://github.com/$(GHUSER)/esp-quick-toolchain/releases/download/$(REL)$(SUBREL)/'$${tarballname}'",'; \
-	 echo '  "archiveFileName": "'$${tarballname}'",'; \
-	 echo '  "checksum": "SHA-256:'$${tarballsha256}'",'; \
-	 echo '  "size": "'$${tarballsize}'"'; \
+	 echo '  "url": "https://github.com/$(GHUSER)/esp-quick-toolchain/releases/download/$(REL)$(SUBREL)/'$${archivename}'",'; \
+	 echo '  "archiveFileName": "'$${archivename}'",'; \
+	 echo '  "checksum": "SHA-256:'$${archivesha256}'",'; \
+	 echo '  "size": "'$${archivesize}'"'; \
 	 echo '}'; } > $(1).json
 endef
 
@@ -1113,9 +1134,10 @@ patch: .stage.patch
 	@echo '  "ext": "$(call ext,$@)"',
 	@echo '  "exe": "$(call exe,$@)"',
 	@echo '  "mktgt": "$(call mktgt,$@)"',
-	@echo '  "tarcmd": "$(call tarcmd,$@)"',
-	@echo '  "taropt": "$(call taropt,$@)"',
-	@echo '  "tarext": "$(call tarext,$@)" }'
+	@echo '  "archivepre": "$(call archivepre,$@)"',
+	@echo '  "archivecmd": "$(call archivecmd,$@)"',
+	@echo '  "archiveopt": "$(call archiveopt,$@)"',
+	@echo '  "archiveext": "$(call archiveext,$@)" }'
 
 # Info about current stage build configuration
 .PHONY: .stage.info .stage.%.info
@@ -1599,28 +1621,23 @@ endef
 TOOLCHAIN_GIT_REPOS := binutils gcc lx106-hal newlib
 TOOLCHAIN_PACKAGES := $(TOOLCHAIN_GIT_REPOS) gmp isl libexpat mpc mpfr ncurses
 
-__toolchain_tarball = $(call host,$(1)).$(TARGET_ARCH)-gcc$(GCC)-eqt$(REL)$(SUBREL)-$(REV)
-toolchain_tarball = $(call __toolchain_tarball,$(1))$(call tarext,$(1))
+__toolchain_archive = $(call host,$(1)).$(TARGET_ARCH)-gcc$(GCC)-eqt$(REL)$(SUBREL)-$(REV)
+toolchain_archive = $(call __toolchain_archive,$(1))$(call archiveext,$(1))
 
-.PHONY: .toolchain.%.tarball
+.PHONY: .toolchain.%.archive
 
 # prepare full toolchain archive including binutils + gdb + gcc + newlib
 # recipe only has to copy staged build result from the target install dir
-.toolchain.%.tarball: | $(PKGDIR)/pkg.%.toolchain
+.toolchain.%.archive: | $(PKGDIR)/pkg.%.toolchain
 	@echo $@
 	# packaged artifact named a bit differently to help with clean-up name matching
 	# note that $(TARGET_ARCH)-gcc IS arduino internal name that is assigned to the toolchain
 	# (ref. arduino recipes below)
 	rm -vf \
-		$(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*$(call tarext,$@) \
-		$(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*$(call tarext,$@).json
+		$(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*$(call archiveext,$@) \
+		$(PKGDIR)/$(call host,$@).$(TARGET_ARCH)-gcc*$(call archiveext,$@).json
 	test -d $(tool-toolchain-pkgdir)/$(TARGET_ARCH)
-	(tarball=$(call toolchain_tarball,$@) \
-	    && cd $(tool-toolchain-pkgdir) \
-		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TARGET_ARCH)/ \
-		&& cd $(PKGDIR) \
-		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
-	@echo PKG $(PKGDIR)/$(call toolchain_tarball,$@)
+	$(call tool_make_archive,$(call toolchain_archive,$@),$(tool-toolchain-pkgdir)/$(TARGET_ARCH),$@)
 
 .tool.%.toolchain: | .stage.%.done
 	@echo $@
@@ -1630,7 +1647,7 @@ toolchain_tarball = $(call __toolchain_tarball,$(1))$(call tarext,$(1))
 	$(MAKE) .toolchain.$(call stem,$@).remove-unused
 	$(MAKE) .toolchain.$(call stem,$@).copy-licenses
 	$(MAKE) .toolchain.$(call stem,$@).strip
-	$(MAKE) .toolchain.$(call stem,$@).tarball
+	$(MAKE) .toolchain.$(call stem,$@).archive
 	$(MAKE) .toolchain.$(call stem,$@).clean
 
 # other currently packaged tools depend only on the host toolchain
@@ -1667,16 +1684,23 @@ define tool-package-copying
 	$(call copy_copying,$(call arena,$@)/$(TOOL_NAME),$(tool-pkgdir)/$(TOOL_NAME)/share/licenses/$(TOOL_NAME),)
 endef
 
-tool_tarball = $(call host,$(1)).$(TOOL_NAME)-$(TOOL_REL).$(DATESTAMP)$(call tarext,$(1))
+tool_archive = $(call host,$(1)).$(TOOL_NAME)-$(TOOL_REL).$(DATESTAMP)$(call archiveext,$(1))
 
-define tool-package-tarball
-	rm -vf $(PKGDIR)/$(call host,$@).$(TOOL_NAME)-*
-	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call tool_tarball,$@)
-	(tarball=$(call tool_tarball,$@) \
-		&& cd $(tool-pkgdir) \
-		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} $(TOOL_NAME) \
+# 1) archive 2) pkg source dir 3) $@
+define tool_make_archive
+	@echo $(call archivecmd,$(3)) $(call archiveopt,$(3)) $(PKGDIR)/$(1)
+	(cd $$(dirname $(2)) \
+		&& ( $(call archivepre,$(3)) ) \
+		&& ( find $$(basename $(2)) -name '*' -print0 \
+			| sort -z \
+			| xargs -0 $(call archivecmd,$(3)) $(call archiveopt,$(3)) $(PKGDIR)/$(1) ) \
 		&& cd $(PKGDIR) \
-		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
+		&& $(call make_releases_json,$(1),$(call ahost,$(3))) )
+endef
+
+define tool-package-archive
+	rm -vf $(PKGDIR)/$(call host,$@).$(TOOL_NAME)-*
+	$(call tool_make_archive,$(call tool_archive,$@),$(tool-pkgdir)/$(TOOL_NAME),$@)
 endef
 
 define tool-package
@@ -1686,7 +1710,7 @@ define tool-package
 		&& $(call make_package_json,$(TOOL_NAME),$(TOOL_DESC),$(TOOL_PKGREL),$(call asys,$@)) )
 	$(tool-package-files)
 	$(tool-package-copying)
-	$(tool-package-tarball)
+	$(tool-package-archive)
 	rm -rf $(tool-pkgdir)
 endef
 
@@ -1817,7 +1841,7 @@ PYTHON_VIA_ENV_TARGETS := $(filter-out $(PYTHON_PACKAGE_TARGETS),$(BUILD_TARGETS
 
 python-pkgdir = $(PKGDIR)/pkg.$(call arch,$@).python
 
-python_via_env_tarball = $(call ahost,$(1)).python-via-env$(call tarext,$(1))
+python_via_env_archive = $(call ahost,$(1)).python-via-env$(call archiveext,$(1))
 
 $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 	@echo $@
@@ -1831,34 +1855,28 @@ $(PYTHON_VIA_ENV_TARGETS:%=.tool.%.python):
 	(cd $(python-pkgdir)/python3 \
 		&& ln -s python3 python)
 	rm -vf $(PKGDIR)/$(call ahost,$@).python-*
-	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call python_via_env_tarball,$@)
-	(tarball=$(call python_via_env_tarball,$@) \
-		&& cd $(python-pkgdir) \
-		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
-		&& cd $(PKGDIR) \
-		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
+	$(call tool_make_archive,$(call python_via_env_archive,$@),$(python-pkgdir)/python3,$@)
 	rm -rf $(python-pkgdir)
 
-python_tarball = $(call ahost,$(1)).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(call tarext,$(1))
+python_archive = $(call ahost,$(1)).python-$(PYTHON_VERSION)+$(PYTHON_RELEASE)$(call archiveext,$(1))
 
 # 1) prepare PyZipFile (aka pythonVER.zip) with immutable standard library pyc
 # 2) prepare pythonVER._pth pointing to PyZipFile and any relevant paths (Windows DLLs dir, current dir, etc.)
 # 3) ensure root dir is named python3, and there is callable python3/python3(.exe)
-# 4) repackage through tarcmd (TODO arduino-cli or spec really care?)
+# 4) repackage through archivecmd
 $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python,LINUX).unpack
 	@echo $@
 	rm -rf $(python-pkgdir)
 	mkdir -p $(python-pkgdir)
 	(cd $(python-pkgdir) \
 		&& cp -r $(REPODIR)/$(call python_dir,$@) python3/ \
-		&& $(REPODIR)/$(call __python_dir,LINUX)/bin/python3 $(PWD)/prepare_python_build_standalone.py python3/ )
+		&& find python3/ -name '*.pyc' -print -delete \
+		&& $(zip_PRE) \
+		&& env TZ=UTC SOURCE_DATE_EPOCH=$(SOURCE_DATE_EPOCH) \
+			$(REPODIR)/$(call __python_dir,LINUX)/bin/python3 \
+			$(PWD)/prepare_python_build_standalone.py python3/ )
 	rm -vf $(PKGDIR)/$(call ahost,$@).python-*
-	@echo $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$(call python_tarball,$@)
-	(tarball=$(call python_tarball,$@) \
-		&& cd $(python-pkgdir) \
-		&& $(call tarcmd,$@) $(call taropt,$@) $(PKGDIR)/$${tarball} ./ \
-		&& cd $(PKGDIR) \
-		&& $(call make_releases_json,$$tarball,$(call ahost,$@)) )
+	$(call tool_make_archive,$(call python_archive,$@),$(python-pkgdir)/python3,$@)
 	rm -rf $(python-pkgdir)
 
 .PHONY: .arduino.%
