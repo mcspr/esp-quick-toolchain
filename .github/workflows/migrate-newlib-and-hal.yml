@@ -119,7 +119,7 @@ jobs:
           export PKGREL_MAJOR=2
 
           # current makefile separates release tagging from the core
-          export DATESTAMP=$(date --utc +%y%d%m)
+          export DATESTAMP=$(date --utc +%y%m%d)
           export TAG=gcc10.3_$(DATESTAMP)_$(REL)_${{ inputs.suffix }}
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
 
