@@ -30,6 +30,9 @@ REV ?= $(call rev,$(PWD))
 # (note that this is THE format used in the esp8266/Arduino package index .json; SUBREL is empty for release)
 VERSION := $(REL)$(SUBREL)-gcc$(GCC)-$(REV)
 
+# upload tag / release url tag used within .json template
+TAG := $(REL)$(SUBREL)
+
 # fixed time value for internal operations on files / fixed package versions
 DATESTAMP ?= $(shell date --utc +%y%m%d)
 SOURCE_DATE_EPOCH ?= $(shell date --utc --date=$(DATESTAMP) +%s)
@@ -741,7 +744,7 @@ archivename=$$(basename $(1)) \
  && archivesha256=$$(sha256sum $(1) | cut -f1 -d" ") \
  && { echo '{'; \
 	 echo '  "host": "'$(2)'",'; \
-	 echo '  "url": "https://github.com/$(GHUSER)/esp-quick-toolchain/releases/download/$(REL)$(SUBREL)/'$${archivename}'",'; \
+	 echo '  "url": "https://github.com/$(GHUSER)/esp-quick-toolchain/releases/download/$(TAG)/'$${archivename}'",'; \
 	 echo '  "archiveFileName": "'$${archivename}'",'; \
 	 echo '  "checksum": "SHA-256:'$${archivesha256}'",'; \
 	 echo '  "size": "'$${archivesize}'"'; \
@@ -1900,29 +1903,41 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 
 ARDUINO_PKGFILE := $(ARDUINO)/package/package_esp8266com_index.template.json
 
-.arduino.package-template-json:
-	@echo "-------- Updating package template.json"
+.arduino.package-template-json: .arduino.toolchain-template-json
+.arduino.toolchain-template-json:
 	./patch_json.py \
 		--pkgfile "$(ARDUINO_PKGFILE)" \
 		--tool $(TARGET_ARCH)-gcc \
 		--version "$(VERSION)" \
 		--glob '$(PKGDIR)/*.$(TARGET_ARCH)-gcc*.json'
+
+.arduino.package-template-json: .arduino.mkspiffs-template-json
+.arduino.mkspiffs-template-json:
 	./patch_json.py \
 		--pkgfile "$(ARDUINO_PKGFILE)" \
 		--tool mkspiffs \
 		--version "$(mkspiffs_REF)+git$(REV)" \
 		--glob '$(PKGDIR)/*.mkspiffs-*.json'
+
+.arduino.package-template-json: .arduino.mklittlefs-template-json
+.arduino.mklittlefs-template-json:
 	./patch_json.py \
 		--pkgfile "$(ARDUINO_PKGFILE)" \
 		--tool mklittlefs \
 		--version "$(subst -,_,$(mklittlefs_REF))+git$(REV)" \
 		--glob '$(PKGDIR)/*.mklittlefs-*.json'
+
+.arduino.package-template-json: .arduino.python-template-json
+.arduino.python-template-json:
 	./patch_json.py \
 		--pkgfile "$(ARDUINO_PKGFILE)" \
 		--tool python3 \
 		--version "$(PYTHON_VERSION)+$(PYTHON_RELEASE)" \
 		--glob '$(PKGDIR)/*python*$(PYTHON_VERSION)+$(PYTHON_RELEASE)*.json' \
 		--glob '$(PKGDIR)/*python-via-env*.json'
+
+.arduino.package-template-json:
+	@echo "-------- Updating package template.json"
 
 .arduino.build: .package.python-$(call __arch_python,LINUX).unpack
 	(cd $(ARDUINO)/tools \
@@ -1962,7 +1977,7 @@ upload: tools
 		&& venv/bin/python $(PWD)/upload_release.py \
 			--user "$(GHUSER)" \
 			--token "$(GHTOKEN)" \
-			--tag "$(REL)$(SUBREL)" \
+			--tag "$(TAG)" \
 			--name "ESP8266 Quick Toolchain $(VERSION)" \
 			--msg "See https://github.com/esp8266/Arduino for more info" \
 			$$(find $(PKGDIR)/ -maxdepth 1 -name "*.tar.gz" -o -name "*.zip") )

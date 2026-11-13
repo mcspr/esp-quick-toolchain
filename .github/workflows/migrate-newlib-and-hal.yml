@@ -2,6 +2,11 @@ name: Repackage 3.2.0-gcc10.3
 
 on:
   workflow_dispatch:
+    inputs:
+      suffix:
+        default: v1
+        required: true
+        type: string
 
 jobs:
   build:
@@ -37,10 +42,11 @@ jobs:
           done
 
           # w/ current tree DarwinARM is the same as Darwin
-          mkdir tmp
-          bash ${GITHUB_WORKSPACE}/builder/.github/scripts/unpack.sh tmp
+          bash ${GITHUB_WORKSPACE}/builder/.github/scripts/unpack.sh ${GITHUB_WORKSPACE}/builder/package
 
-          for d in tmp/* ; do
+          popd
+
+          for d in ${GITHUB_WORKSPACE}/builder/package/* ; do
             pushd "$d"
 
             # hal blob intended for prefix, will be rebuilt
@@ -64,7 +70,7 @@ jobs:
           export NOLOG=1
           export GCC=10.3
 
-          cp -r ${GITHUB_WORKSPACE}/toolchain/tmp/Linux.64 xtensa-lx106-elf.x86_64
+          cp -r package/pkg.LINUX.toolchain/xtensa-lx106-elf xtensa-lx106-elf.x86_64
           echo mcspr > .ghuser
           echo mcspr > .ghtoken
 
@@ -82,7 +88,7 @@ jobs:
           pushd builder/arena.x86_64/newlib
 
           export PATH="${GITHUB_WORKSPACE}/builder/xtensa-lx106-elf.x86_64/bin:${PATH}"
-          for d in ${GITHUB_WORKSPACE}/toolchain/tmp/* ; do
+          for d in ${GITHUB_WORKSPACE}/builder/package/*/xtensa-lx106-elf ; do
             make prefix="$d" install
           done
 
@@ -94,58 +100,52 @@ jobs:
           pushd builder/arena.x86_64/lx106-hal
 
           export PATH="${GITHUB_WORKSPACE}/builder/xtensa-lx106-elf.x86_64/bin:${PATH}"
-          for d in ${GITHUB_WORKSPACE}/toolchain/tmp/* ; do
+          for d in ${GITHUB_WORKSPACE}/builder/package/*/xtensa-lx106-elf ; do
             make prefix="$d"/xtensa-lx106-elf install
           done
 
           popd
 
-      - name: Repackage
-        shell: bash
-        run: |
-          pushd builder
-          mkdir package
-
-          hash=$(git rev-parse --short ${{ github.sha }})
-
-          popd
-
-          date=$(date +%y%m%d)
-
-          old_ver="5.100300.230224"
-          new_ver="2.100300.${date}"
-
-          bash ${GITHUB_WORKSPACE}/builder/.github/scripts/repack.sh \
-            "${GITHUB_WORKSPACE}/toolchain/tmp" \
-            "${GITHUB_WORKSPACE}/builder/package" \
-            "$hash" \
-            "$old_ver" \
-            "$new_ver"
-
-      - name: Generate .json fragments for package index
+      - name: Generate archives and refresh package index .json
+        id: package
         shell: bash
         run: |
           pushd builder
 
-          for f in package/* ; do
-            # macos binaries from repack are still compatible w/ 10.10
-            if [[ "$f" =~ "x86_64-apple-darwin14" ]] ; then
-              make MACOSX86_HOST=x86_64-apple-darwin14 ${f}.json
-            else
-              make ${f}.json
+          # for the most part, this is still a previous release
+          export GCC=10.3
+          export REL=3.2.0
+          export SUBREL=""
+          export PKGREL_MAJOR=2
+
+          # current makefile separates release tagging from the core
+          export DATESTAMP=$(date --utc +%y%d%m)
+          export TAG=gcc10.3_$(DATESTAMP)_$(REL)_${{ inputs.suffix }}
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+          for t in LINUX LINUX32 ARM64 RPI WIN64 WIN32 MACOSX86 ; do
+            make -W .stage.${t}.done \
+              install=package/pkg.${t}.toolchain/xtensa-lx106-elf \
+              .toolchain.${t}.package-json
+
+            # macOS binaries from repack are still compatible w/ 10.10
+            # target archive MACOSX86 is a stand-in for MACOSARM
+            make_opts=""
+            if [[ "$t" = "MACOSX86" ]] ; then
+              make_opts="MACOSX86_HOST=x86_64-apple-darwin14"
             fi
+
+            make ${make_opts} .toolchain.${t}.archive
           done
 
-          python patch_json.py \
-            --pkgfile ${GITHUB_WORKSPACE}/toolchain/package_esp8266com_index.template.json \
-            --tool xtensa-lx106-elf-gcc \
-            --version testing \
-            --glob 'package/*.xtensa-lx106-elf-gcc*.json'
+          make \
+            ARDUINO_PKGFILE=${GITHUB_WORKSPACE}/toolchain/package_esp8266com_index.template.json \
+            .arduino.toolchain-template-json
 
           popd
 
       - uses: ncipollo/release-action@v1
         with:
           artifacts: "builder/package/*.tar.gz,builder/package/*.zip,toolchain/package_esp8266com_index.template.json"
-          tag: testing
+          tag: ${{ steps.package.outputs.tag }}
           draft: true

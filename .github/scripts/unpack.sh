@@ -17,7 +17,18 @@ for system in Darwin Linux LinuxARM Windows ; do
       --bits "$bits" \
       --tool xtensa-lx106-elf
     if test -d xtensa-lx106-elf ; then
-      mv xtensa-lx106-elf "$dst"/"${system}.${bits}"
+      case "${system}.${bits}" in
+        Darwin.64) target="MACOSX86" ;;
+        Linux.32) target="LINUX32" ;;
+        Linux.64) target="LINUX64" ;;
+        LinuxARM.32) target="RPI" ;;
+        LinuxARM.64) target="ARM64" ;;
+        Windows.32) target="WIN32" ;;
+        Windows.64) target="WIN64" ;;
+        *) echo "Unknown target $target" >&2; exit 1 ;;
+      esac
+      mkdir -p "$dst"/"pkg.${target}.toolchain"
+      mv xtensa-lx106-elf "$dst"/"pkg.${target}.toolchain/"
     fi
   done
 done
