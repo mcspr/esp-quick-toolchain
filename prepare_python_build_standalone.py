@@ -5,6 +5,34 @@ import pathlib
 import sys
 import zipfile
 
+
+class PythonNotSupported(Exception):
+    pass
+
+
+# manually construct zinfo object for pyc .zip for older python versions
+# also ref. Makefile invocation and env SOURCE_DATE_EPOCH=...
+if sys.version_info >= (3, 15):
+    from zipfile import PyZipFile
+elif sys.version_info >= (3, 14):
+
+    class PyZipFile(zipfile.PyZipFile):
+        def write(
+            self, filename, arcname=None, compress_type=None, compresslevel=None
+        ):  # ZipFile::write
+            zinfo = zipfile.ZipInfo.from_file(
+                filename, arcname, strict_timestamps=self._strict_timestamps
+            )
+            zinfo._for_archive(
+                self
+            )  # SOURCE_DATE_EPOCH timestamp plus filemode adjustments
+
+            with open(filename, "rb") as f:
+                self.writestr(zinfo, f.read(), compresslevel=compresslevel)
+
+else:
+    raise PythonNotSupported(sys.version_info)
+
 # ref. emscripten/wasm_assets.py
 # note that site data vars are already portable
 PYZIPFILE_IGNORE_NAMES = (
@@ -177,11 +205,10 @@ if __name__ == "__main__":
             / "__pycache__",  # purge zipfile artifacts, in case stdlib_dir remains
         ]
 
-        with zipfile.PyZipFile(
+        with PyZipFile(
             stdlib_zip, mode="w", compression=zipfile.ZIP_DEFLATED
         ) as zip_archive:
-            if zip_archive.compresslevel is not None:
-                zip_archive.compresslevel = 9
+            zip_archive.compresslevel = 9
             for p in sorted(handler.stdlib_dir.iterdir()):
                 p = p.resolve()
 
