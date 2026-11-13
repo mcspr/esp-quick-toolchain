@@ -20,7 +20,7 @@ for system in Darwin Linux LinuxARM Windows ; do
       case "${system}.${bits}" in
         Darwin.64) target="MACOSX86" ;;
         Linux.32) target="LINUX32" ;;
-        Linux.64) target="LINUX64" ;;
+        Linux.64) target="LINUX" ;;
         LinuxARM.32) target="RPI" ;;
         LinuxARM.64) target="ARM64" ;;
         Windows.32) target="WIN32" ;;
