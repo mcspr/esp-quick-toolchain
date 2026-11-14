@@ -693,6 +693,7 @@ setenv = export \
 	$(call archsetenv,$(1)) \
 	CFLAGS_FOR_TARGET="$(CFFT)" \
 	CXXFLAGS_FOR_TARGET="$(CFFT)" \
+	ARFLAGS_FOR_TARGET="crDu" \
 	CFLAGS="$(call cflags,$(1)) $(SHARED_OPT_FLAGS) $${CFLAGS}" \
 	CXXFLAGS="$(SHARED_OPT_FLAGS) $${CXXFLAGS}" \
 	LDFLAGS="$(call ldflags,$(1)) $${LDFLAGS}" \
