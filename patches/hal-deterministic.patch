@@ -1,13 +1,16 @@
 diff --git a/configure.ac b/configure.ac
-index 8ddb000..a06f9a4 100644
+index 8ddb000..769b108 100644
 --- a/configure.ac
 +++ b/configure.ac
-@@ -21,6 +21,9 @@ AM_PROG_AR
+@@ -21,6 +21,12 @@ AM_PROG_AR
  AC_PROG_CC
  AC_PROG_RANLIB
- 
+
 +ARFLAGS="crD"
++AC_SUBST([ARFLAGS])
++
 +RANLIB="$RANLIB -D"
++AC_SUBST([RANLIB])
 +
  AC_MSG_CHECKING([for call0 ABI])
  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#if __XTENSA_CALL0_ABI__
