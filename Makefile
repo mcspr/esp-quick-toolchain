@@ -28,10 +28,10 @@ REV ?= $(call rev,$(PWD))
 # arduino .json version. probably *should* conform with semver spec, but currently isnt
 # assuming builtin tool search prefers boards package over any other, and matching happens lexicographically
 # (note that this is THE format used in the esp8266/Arduino package index .json; SUBREL is empty for release)
-VERSION := $(REL)$(SUBREL)-gcc$(GCC)-$(REV)
+VERSION ?= $(REL)$(SUBREL)-gcc$(GCC)-$(REV)
 
 # upload tag / release url tag used within .json template
-TAG := $(REL)$(SUBREL)
+TAG ?= $(REL)$(SUBREL)
 
 # fixed time value for internal operations on files / fixed package versions
 DATESTAMP ?= $(shell date --utc +%y%m%d)
@@ -1901,7 +1901,7 @@ $(PYTHON_PACKAGE_TARGETS:%=.tool.%.python): .package.python-$(call __arch_python
 
 .arduino.tools: tools
 
-ARDUINO_PKGFILE := $(ARDUINO)/package/package_esp8266com_index.template.json
+ARDUINO_PKGFILE ?= $(ARDUINO)/package/package_esp8266com_index.template.json
 
 .arduino.package-template-json: .arduino.toolchain-template-json
 .arduino.toolchain-template-json:
