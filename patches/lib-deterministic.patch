@@ -1,63 +1,90 @@
-diff --git a/libtool.m4 b/libtool.m4
-index a216bb14e..9a9dbdd78 100644
---- a/libtool.m4
-+++ b/libtool.m4
-@@ -978,8 +978,8 @@ int forced_loaded() { return 2;}
- _LT_EOF
-       echo "$LTCC $LTCFLAGS -c -o conftest.o conftest.c" >&AS_MESSAGE_LOG_FD
-       $LTCC $LTCFLAGS -c -o conftest.o conftest.c 2>&AS_MESSAGE_LOG_FD
--      echo "$AR cru libconftest.a conftest.o" >&AS_MESSAGE_LOG_FD
--      $AR cru libconftest.a conftest.o 2>&AS_MESSAGE_LOG_FD
-+      echo "$AR crD libconftest.a conftest.o" >&AS_MESSAGE_LOG_FD
-+      $AR crD libconftest.a conftest.o 2>&AS_MESSAGE_LOG_FD
-       cat > conftest.c << _LT_EOF
- int main() { return 0;}
- _LT_EOF
+diff --git a/configure b/configure
+index 8e5f0b1d6..7a2af5a5e 100755
+--- a/configure
++++ b/configure
+@@ -14165,6 +14165,9 @@ fi
+ 
+ RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET"
+ 
++RANLIB_FOR_TARGET="$RANLIB_FOR_TARGET -D"
++
++
+ { $as_echo "$as_me:${as_lineno-$LINENO}: checking where to find the target ar" >&5
+ $as_echo_n "checking where to find the target ar... " >&6; }
+ if test "x${build}" != "x${host}" ; then
+diff --git a/configure.ac b/configure.ac
+index 6455e1c2b..849ded02b 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -3455,6 +3455,9 @@ ACX_CHECK_INSTALLED_TARGET_TOOL(WINDMC_FOR_TARGET, windmc)
+ 
+ RAW_CXX_FOR_TARGET="$CXX_FOR_TARGET"
+ 
++RANLIB_FOR_TARGET="$RANLIB_FOR_TARGET -D"
++AC_SUBST([RANLIB_FOR_TARGET])
++
+ GCC_TARGET_TOOL(ar, AR_FOR_TARGET, AR, [binutils/ar])
+ GCC_TARGET_TOOL(as, AS_FOR_TARGET, AS, [gas/as-new])
+ GCC_TARGET_TOOL(cc, CC_FOR_TARGET, CC, [gcc/xgcc -B$$r/$(HOST_SUBDIR)/gcc/])
 diff --git a/newlib/Makefile.in b/newlib/Makefile.in
-index f38c3bd10..9c3acd50e 100644
+index f38c3bd10..9287644be 100644
 --- a/newlib/Makefile.in
 +++ b/newlib/Makefile.in
-@@ -1066,7 +1066,7 @@ am__uninstall_files_from_dir = { \
+@@ -1066,7 +1066,6 @@ am__uninstall_files_from_dir = { \
  am__installdirs = "$(DESTDIR)$(toollibdir)" "$(DESTDIR)$(cctdir)" \
-    "$(DESTDIR)$(toollibdir)"
+ 	"$(DESTDIR)$(toollibdir)"
  LIBRARIES = $(toollib_LIBRARIES)
 -ARFLAGS = cru
-+ARFLAGS = crD
  AM_V_AR = $(am__v_AR_@AM_V@)
  am__v_AR_ = $(am__v_AR_@AM_DEFAULT_V@)
  am__v_AR_0 = @echo "  AR      " $@;
-@@ -3986,7 +3986,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
- PACKAGE_URL = @PACKAGE_URL@
- PACKAGE_VERSION = @PACKAGE_VERSION@
- PATH_SEPARATOR = @PATH_SEPARATOR@
--RANLIB = @RANLIB@
-+RANLIB = @RANLIB@ -D
- READELF = @READELF@
- SET_MAKE = @SET_MAKE@
- SHELL = @SHELL@
-diff --git a/newlib/aclocal.m4 b/newlib/aclocal.m4
-index 1703cdbf0..275508c8d 100644
---- a/newlib/aclocal.m4
-+++ b/newlib/aclocal.m4
-@@ -79,7 +79,7 @@ AC_CACHE_CHECK([the archiver ($AR) interface], [am_cv_ar_interface],
-   [AC_LANG_PUSH([C])
-    am_cv_ar_interface=ar
-    AC_COMPILE_IFELSE([AC_LANG_SOURCE([[int some_variable = 0;]])],
--     [am_ar_try='$AR cru libconftest.a conftest.$ac_objext >&AS_MESSAGE_LOG_FD'
-+     [am_ar_try='$AR crD libconftest.a conftest.$ac_objext >&AS_MESSAGE_LOG_FD'
-       AC_TRY_EVAL([am_ar_try])
-       if test "$ac_status" -eq 0; then
-         am_cv_ar_interface=ar
+@@ -3933,6 +3932,7 @@ ACLOCAL = @ACLOCAL@
+ AMTAR = @AMTAR@
+ AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
+ AR = @AR@
++ARFLAGS = @ARFLAGS@
+ AUTOCONF = @AUTOCONF@
+ AUTOHEADER = @AUTOHEADER@
+ AUTOMAKE = @AUTOMAKE@
+diff --git a/newlib/acinclude.m4 b/newlib/acinclude.m4
+index 19301289f..9424f5253 100644
+--- a/newlib/acinclude.m4
++++ b/newlib/acinclude.m4
+@@ -127,6 +127,12 @@ AC_REQUIRE([AM_PROG_AR])dnl
+ AC_PROG_RANLIB
+ AC_CHECK_TOOL(READELF, readelf, :)
+ 
++RANLIB="$RANLIB -D"
++AC_SUBST([RANLIB])
++
++ARFLAGS="crD"
++AC_SUBST([ARFLAGS])
++
+ dnl We need these programs, but so does Automake.  Require the macros to avoid
+ dnl expanding them multiple times.
+ AC_REQUIRE([AC_PROG_INSTALL])dnl
 diff --git a/newlib/configure b/newlib/configure
-index 2f586658e..2ff04cb5b 100755
+index 2f586658e..6ab4a4eb4 100755
 --- a/newlib/configure
 +++ b/newlib/configure
-@@ -4675,7 +4675,7 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
- int some_variable = 0;
- _ACEOF
- if ac_fn_c_try_compile "$LINENO"; then :
--  am_ar_try='$AR cru libconftest.a conftest.$ac_objext >&5'
-+  am_ar_try='$AR crD libconftest.a conftest.$ac_objext >&5'
-       { { eval echo "\"\$as_me\":${as_lineno-$LINENO}: \"$am_ar_try\""; } >&5
-   (eval $am_ar_try) 2>&5
-   ac_status=$?
+@@ -857,6 +857,7 @@ ELIX_LEVEL_0_FALSE
+ ELIX_LEVEL_0_TRUE
+ NO_INCLUDE_LIST
+ NEWLIB_CFLAGS
++ARFLAGS
+ READELF
+ RANLIB
+ ac_ct_AR
+@@ -5206,6 +5207,12 @@ else
+ fi
+ 
+ 
++RANLIB="$RANLIB -D"
++
++
++ARFLAGS="crD"
++
++
+ 
+ . ${newlib_basedir}/configure.host
+ 
