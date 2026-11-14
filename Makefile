@@ -694,6 +694,7 @@ setenv = export \
 	CFLAGS_FOR_TARGET="$(CFFT)" \
 	CXXFLAGS_FOR_TARGET="$(CFFT)" \
 	ARFLAGS_FOR_TARGET="crDu" \
+	RANLIB_FOR_TARGET="$(TARGET_ARCH)-ranlib -D" \
 	CFLAGS="$(call cflags,$(1)) $(SHARED_OPT_FLAGS) $${CFLAGS}" \
 	CXXFLAGS="$(SHARED_OPT_FLAGS) $${CXXFLAGS}" \
 	LDFLAGS="$(call ldflags,$(1)) $${LDFLAGS}" \
@@ -1403,6 +1404,8 @@ endif
 		&& $(REPODIR)/$(lx106-hal_DIR)/configure \
 			$(call configure_target,$@) \
 			CC=$(TARGET_ARCH)-gcc \
+			ARFLAGS="crDu" \
+			RANLIB="$(TARGET_ARCH)-ranlib -D" \
 			--target=$(TARGET_ARCH) \
 			--host=$(TARGET_ARCH) ) $(call log_stage,$@)
 	touch $@
